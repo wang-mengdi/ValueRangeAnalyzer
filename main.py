@@ -1,6 +1,6 @@
-import os
-import sys
+import collections
 from LexicalAnalyzer import *
+from Parser import *
 
 
 def parse(lines):
@@ -9,9 +9,10 @@ def parse(lines):
 
 def work(filename):
     fin = open(filename)
-    lines = fin.readlines()
-    print(lines)
-    GetTokens("".join(lines))
+    lines = delete_comments(fin.readlines())
+    get_tokens("".join(lines))
+    #print(lines)
+    #GetTokens("".join(lines))
 
 if __name__=="__main__":
     work(sys.argv[1])
