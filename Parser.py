@@ -8,12 +8,22 @@ class Variable(object):
         self.typ=typ
         self.name=name
 
+def Expression:
+    def __init__(self):
+        self.ops=[]
+        self.opt=[]
+
 def Assignment(object):
-    def __init__(self,op1,op2,opt,dst):
-        self.op1=op1
-        self.op2=op2
-        self.opt=opt
-        self.dst=dst
+    def __init__(self):
+        self.ops = []
+
+def Return(obect):
+    def __init__(self,var):
+        self.var=var
+
+def IfJump(object):
+    def __init__(self,cnd):
+        self.cnd=cnd
 
 class Function(object):
 
@@ -42,10 +52,46 @@ class Function(object):
             elif t==')':
                 break
 
+    def get_jumpdst(line_tokens):
+        assert(line_tokens[0]=='goto')
+        return line_tokens[1]
+
+    def get_condition(line_tokens):
+        assert(line_tokens[1]=='(')
+        n=len(line_tokens)
+        i=2
+        c=Expression()
+        while i<n:
+            t=line_tokens[i]
+            if t==')':
+                break
+            elif t=='<' or t=='>' or t=='<=' or t=='>=' or t=='==' or t=='!=':
+                c.opt=t
+            else:
+                t.ops.append(t)
+        return c
+
+    def get_return(line_tokens):
+        return Return(line_tokens[1])
+
+    def get_assignment(line_tokens):
+        Assignment a()
+        n=len(line_tokens)
+        a.dst=line_tokens[0]
+        assert(line_tokens[1]=='=')
+        i=2
+        while i<n:
+            t=line_tokens[i]
+            if t=='+' or t=='-' or t=='*' or t=='/':
+                a.opt=t
+            else:
+                a.ops.append(t)
+        return a
+
     def parse_from(lines,ast): # lines is a collections.deque
         self.ast=ast
         while len(lines) > 0:
-            tokens = GetTokens(lines.popleft())
+            tokens = get_tokens(lines.popleft())
             if tokens[0]=='#': # comment
                 global index
                 index += 1
@@ -58,8 +104,22 @@ class Function(object):
                 self.jumpmap['bb'+tokens[2]]=index
             elif tokens[0]=='int'||tokens[0]=='float': # definition of a variable
                 new_variable(tokens[0],tokens[1])
+                indesx += 1
             elif tokens[0]=='if':
-                assert(tokens[1])
+                ist=IfJump(get_condition())
+                ist.jump_true=get_jumpdst(get_tokens(lines.popleft()))
+                if get_tokens(lines[0])[0]=='else':
+                    lines.popleft()
+                    ist.jump_false=get_jumpdst(get_tokens(lines.popleft()))
+                global index
+                self.ifjumps[index]=ist
+                index += 1
+            elif tokens[0]=='return':
+                r=get_return(tokens)
+                self.return_ist=r
+                global index
+                index += 1
+            else:
 
 
 class AST(object):
@@ -67,6 +127,8 @@ class AST(object):
     def __init__(self):
         self.functions={}
         self.variables={}
+        self.ifjumps={}
+        self.assignments={}
 
     def parse_from(lines): # lines is a collection.deque
         global index
