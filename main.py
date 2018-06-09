@@ -10,9 +10,9 @@ def parse(lines):
 def work(filename):
     fin = open(filename)
     lines = delete_comments(fin.readlines())
-    get_tokens("".join(lines))
+    #get_tokens("".join(lines))
     #print(lines)
-    #GetTokens("".join(lines))
+    print(get_tokens("".join(lines)))
 
 if __name__=="__main__":
     work(sys.argv[1])

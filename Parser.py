@@ -17,7 +17,7 @@ class Assignment(object):
     def __init__(self):
         self.ops = []
 
-class Return(obect):
+class Return(object):
     def __init__(self,var):
         self.var=var
 
@@ -75,7 +75,7 @@ class Function(object):
         return Return(line_tokens[1])
 
     def get_assignment(line_tokens):
-        Assignment a()
+        a=Assignment()
         n=len(line_tokens)
         a.dst=line_tokens[0]
         assert(line_tokens[1]=='=')
@@ -102,7 +102,7 @@ class Function(object):
                 assert(tokens[3]=='>')
                 global index
                 self.jumpmap['bb'+tokens[2]]=index
-            elif tokens[0]=='int'||tokens[0]=='float': # definition of a variable
+            elif tokens[0]=='int' or tokens[0]=='float': # definition of a variable
                 new_variable(tokens[0],tokens[1])
                 indesx += 1
             elif tokens[0]=='if':
