@@ -8,20 +8,20 @@ class Variable(object):
         self.typ=typ
         self.name=name
 
-def Expression:
+class Expression:
     def __init__(self):
         self.ops=[]
         self.opt=[]
 
-def Assignment(object):
+class Assignment(object):
     def __init__(self):
         self.ops = []
 
-def Return(obect):
+class Return(obect):
     def __init__(self,var):
         self.var=var
 
-def IfJump(object):
+class IfJump(object):
     def __init__(self,cnd):
         self.cnd=cnd
 
@@ -120,6 +120,10 @@ class Function(object):
                 global index
                 index += 1
             else:
+                ist=get_assignment(tokens)
+                global index
+                self.ast.assignments[index]=ist
+                index += 1
 
 
 class AST(object):
