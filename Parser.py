@@ -25,6 +25,10 @@ class IfJump(object):
     def __init__(self,cnd):
         self.cnd=cnd
 
+class Jump(object):
+    def __init__(self,dst):
+        self.dst=dst
+
 class Function(object):
 
     def __init__(self,name):
@@ -40,6 +44,7 @@ class Function(object):
     def get_arglist(self,line_tokens):
         self.arglist = []
         n = len(line_tokens)
+        #print("get_arglist: ",line_tokens)
         assert(line_tokens[1]=='(')
         i = 2
         while i<n:
@@ -58,29 +63,29 @@ class Function(object):
 
     def get_condition(self,line_tokens):
         assert(line_tokens[1]=='(')
+        #print("get_condition: ",line_tokens)
         n=len(line_tokens)
-        i=2
         c=Expression()
-        while i<n:
+        for i in range(2,n):
             t=line_tokens[i]
             if t==')':
                 break
             elif t=='<' or t=='>' or t=='<=' or t=='>=' or t=='==' or t=='!=':
                 c.opt=t
             else:
-                t.ops.append(t)
+                c.ops.append(t)
         return c
 
     def get_return(self,line_tokens):
         return Return(line_tokens[1])
 
     def get_assignment(self,line_tokens):
+        #print("get_assignment: ",line_tokens)
         a=Assignment()
         n=len(line_tokens)
         a.dst=line_tokens[0]
         assert(line_tokens[1]=='=')
-        i=2
-        while i<n:
+        for i in range(2,n):
             t=line_tokens[i]
             if t=='+' or t=='-' or t=='*' or t=='/':
                 a.opt=t
@@ -93,31 +98,39 @@ class Function(object):
         self.ast=ast
         while len(lines) > 0:
             tokens = get_tokens(lines.popleft())
+            #print("index: {}, tokens:{}".format(index,tokens))
             if tokens[0]=='#': # comment
                 index += 1
             elif tokens[0]==self.name: # definition of this function
-                get_arglist(tokens[0])
+                self.get_arglist(tokens)
+            elif tokens[0]=='{' or tokens[0]=='}': # the line after function definition
+                pass
             elif tokens[0]=='<': # a jump label
-                assert(tokens[1]=='bb')
-                assert(tokens[3]=='>')
+                assert(tokens[1]=='bb' or tokens[1][0]=='L')
+                assert(tokens[-2]=='>')
+                assert(tokens[-1]==':')
                 self.jumpmap['bb'+tokens[2]]=index
             elif tokens[0]=='int' or tokens[0]=='float': # definition of a variable
-                new_variable(tokens[0],tokens[1])
-                indesx += 1
+                self.new_variable(tokens[0],tokens[1])
+                index += 1
             elif tokens[0]=='if':
-                ist=IfJump(get_condition())
-                ist.jump_true=get_jumpdst(get_tokens(lines.popleft()))
+                ist=IfJump(self.get_condition(tokens))
+                ist.jump_true=self.get_jumpdst(get_tokens(lines.popleft()))
                 if get_tokens(lines[0])[0]=='else':
                     lines.popleft()
-                    ist.jump_false=get_jumpdst(get_tokens(lines.popleft()))
-                self.ifjumps[index]=ist
+                    ist.jump_false=self.get_jumpdst(get_tokens(lines.popleft()))
+                self.ast.jumps[index]=ist
+                index += 1
+            elif tokens[0]=='goto':
+                ist=Jump(tokens[1])
+                self.ast.jumps[index]=ist
                 index += 1
             elif tokens[0]=='return':
-                r=get_return(tokens)
+                r=self.get_return(tokens)
                 self.return_ist=r
                 index += 1
             else:
-                ist=get_assignment(tokens)
+                ist=self.get_assignment(tokens)
                 self.ast.assignments[index]=ist
                 index += 1
 
@@ -127,7 +140,7 @@ class AST(object):
     def __init__(self):
         self.functions={}
         self.variables={}
-        self.ifjumps={}
+        self.jumps={}
         self.assignments={}
 
     def parse_from(self, lines): # lines is a collection.deque
@@ -143,6 +156,6 @@ class AST(object):
                 nm=tokens[2]
                 f = Function(nm)
                 f.parse_from(lines,self)
-                functions[nm]=f
+                self.functions[nm]=f
 
 

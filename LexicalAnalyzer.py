@@ -3,11 +3,11 @@ import sys
 import re
 
 def delete_comments(lines):
-    f = lambda L:L.lstrip(' ')[0]!='#'
+    f = lambda L:L.lstrip(' ')[0]!='#' and L.rstrip(' \n')!=""
     return list(filter(f,lines))
 
 def get_tokens(S):
-    print(S)
+    #print(S)
     re_str = r"int|float|goto|if|else|Function|return"\
             "|\d+\.\d+[eE][-+]?\d+|\d+\.\d+|[+-]?\d+"\
             "|[a-zA-Z_]\.\d+|[a-zA-Z_]\w*"\
