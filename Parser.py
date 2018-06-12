@@ -31,13 +31,13 @@ class Function(object):
         self.jumpmap={}
         self.name=name
 
-    def new_variable(typ,name):
+    def new_variable(self,typ,name):
         s=self.name+'_'+name
         v = Variable(typ,s)
         self.ast.variables[s]=v
         return v
 
-    def get_arglist(line_tokens):
+    def get_arglist(self,line_tokens):
         self.arglist = []
         n = len(line_tokens)
         assert(line_tokens[1]=='(')
@@ -52,11 +52,11 @@ class Function(object):
             elif t==')':
                 break
 
-    def get_jumpdst(line_tokens):
+    def get_jumpdst(self,line_tokens):
         assert(line_tokens[0]=='goto')
         return line_tokens[1]
 
-    def get_condition(line_tokens):
+    def get_condition(self,line_tokens):
         assert(line_tokens[1]=='(')
         n=len(line_tokens)
         i=2
@@ -71,10 +71,10 @@ class Function(object):
                 t.ops.append(t)
         return c
 
-    def get_return(line_tokens):
+    def get_return(self,line_tokens):
         return Return(line_tokens[1])
 
-    def get_assignment(line_tokens):
+    def get_assignment(self,line_tokens):
         a=Assignment()
         n=len(line_tokens)
         a.dst=line_tokens[0]
@@ -88,19 +88,18 @@ class Function(object):
                 a.ops.append(t)
         return a
 
-    def parse_from(lines,ast): # lines is a collections.deque
+    def parse_from(self,lines,ast): # lines is a collections.deque
+        global index
         self.ast=ast
         while len(lines) > 0:
             tokens = get_tokens(lines.popleft())
             if tokens[0]=='#': # comment
-                global index
                 index += 1
             elif tokens[0]==self.name: # definition of this function
                 get_arglist(tokens[0])
             elif tokens[0]=='<': # a jump label
                 assert(tokens[1]=='bb')
                 assert(tokens[3]=='>')
-                global index
                 self.jumpmap['bb'+tokens[2]]=index
             elif tokens[0]=='int' or tokens[0]=='float': # definition of a variable
                 new_variable(tokens[0],tokens[1])
@@ -111,17 +110,14 @@ class Function(object):
                 if get_tokens(lines[0])[0]=='else':
                     lines.popleft()
                     ist.jump_false=get_jumpdst(get_tokens(lines.popleft()))
-                global index
                 self.ifjumps[index]=ist
                 index += 1
             elif tokens[0]=='return':
                 r=get_return(tokens)
                 self.return_ist=r
-                global index
                 index += 1
             else:
                 ist=get_assignment(tokens)
-                global index
                 self.ast.assignments[index]=ist
                 index += 1
 
@@ -134,13 +130,12 @@ class AST(object):
         self.ifjumps={}
         self.assignments={}
 
-    def parse_from(lines): # lines is a collection.deque
+    def parse_from(self, lines): # lines is a collection.deque
         global index
         index = 0
         while len(lines) > 0:
-            tokens = GetTokens(lines.popleft())
+            tokens = get_tokens(lines.popleft())
             if tokens[0]=='#': # comment
-                global index
                 index += 1
                 pass
             elif tokens[0]==';;': # function prototype
