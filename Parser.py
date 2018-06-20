@@ -1,12 +1,13 @@
 import collections
 from LexicalAnalyzer import *
+from ConstraintGraph import *
 
 index = 0
 
-class Variable(object):
-    def __init__(self,typ,name):
-        self.typ=typ
-        self.name=name
+#class Variable(object):
+#    def __init__(self,typ,name):
+#        self.typ=typ
+#        self.name=name
 
 class Expression:
     def __init__(self):
@@ -29,11 +30,29 @@ class Jump(object):
     def __init__(self,dst):
         self.dst=dst
 
+class Phi(object):
+    def __init__(self,src1,src2,dst):
+        self.src1=src1
+        self.src2=src2
+
+class Block(object):
+    def __init__(self,name):
+        self.name=name
+        self.goto=None
+        self.ists=[]
+
+#    def parse(self,):
+
 class Function(object):
 
-    def __init__(self,name):
-        self.jumpmap={}
-        self.name=name
+    def __init__(self):
+        #self.jumpmap={}
+        #self.name=name
+        self.blocks={}
+        #self.entry=None
+    
+    def get_name(self,tokens):
+        self.name=tokens[0]
 
     def new_variable(self,typ,name):
         s=self.name+'_'+name
@@ -93,23 +112,61 @@ class Function(object):
                 a.ops.append(t)
         return a
 
-    def parse_from(self,lines,ast): # lines is a collections.deque
+    def deal_PHI(tokens):
+        assert(tokens[2]=='=')
+        assert(tokens[3]=='PHI')
+        assert(tokens[4]=='<')
+        #src1=tokens[]
+        assert(tokens[9]==',')
+        assert(tokens[14]=='>')
+        
+
+    def parse_from(self,lines): # lines is a collections.deque
+        is_bb=lambda t:t[0][-1]==':'
+        #print("function: {}, lines:{}".format(self.name,lines))
+        bbs=list(filter(is_bb,zip(lines,range(len(lines)))))
+        bbs=bbs+[(None,-1),] # to deal with the final block
+        bn=len(bbs)
+        B=[]
+        for i in range(bn-1):
+            lid,rid=bbs[i][1],bbs[i+1][1]
+            tokens=lines[lid]
+            print(tokens)
+            assert(tokens[0]=='<' and tokens[-2]=='>' and tokens[-1]==':')
+            b=Block("".join(tokens[:-1]))
+            b.lines=lines[lid:rid]
+            B.append(b)
+            #self.blocks[b.name]=b
+        for i in range(len(B)-1):
+            B[i].natural_goto=B[i+1].name
+            self.blocks[B[i].name]=B[i]
+        self.entry,self.out=B[0],B[-1]
+        return
         global index
         self.ast=ast
         while len(lines) > 0:
             tokens = get_tokens(lines.popleft())
             #print("index: {}, tokens:{}".format(index,tokens))
-            if tokens[0]=='#': # comment
+            cur_block = None
+            if tokens[0]=='<': # a jump label
+                assert(tokens[1]=='bb' or tokens[1][0]=='L')
+                assert(tokens[-2]=='>')
+                assert(tokens[-1]==':')
+                if cur_block != None:
+                    self.blocks[cur_block.name]=cur_block
+                    if len(self.blocks)==1:
+                        self.entry=self.blocks[cur_block.name]
+                cur_block=Block(int(tokens[2]))
+                #self.jumpmap['bb'+tokens[2]]=index
+            elif tokens[0]=='#': # PHI operation
+                tgt,src1,src2=tokens[1],tokens[5],tokens[10]
+                map(self.ast.add_var,[tgt,src1,src2])
+                ast.csts[index]=Phi(src1,src2,tgt)
                 index += 1
             elif tokens[0]==self.name: # definition of this function
                 self.get_arglist(tokens)
             elif tokens[0]=='{' or tokens[0]=='}': # the line after function definition
                 pass
-            elif tokens[0]=='<': # a jump label
-                assert(tokens[1]=='bb' or tokens[1][0]=='L')
-                assert(tokens[-2]=='>')
-                assert(tokens[-1]==':')
-                self.jumpmap['bb'+tokens[2]]=index
             elif tokens[0]=='int' or tokens[0]=='float': # definition of a variable
                 self.new_variable(tokens[0],tokens[1])
                 index += 1
@@ -129,21 +186,39 @@ class Function(object):
                 r=self.get_return(tokens)
                 self.return_ist=r
                 index += 1
-            else:
+            else: # an assignment
                 ist=self.get_assignment(tokens)
                 self.ast.assignments[index]=ist
-                index += 1
+                if(len(ist.ops)==1):
+                    index += 1
 
 
-class AST(object):
+class CFGraph(object):
 
     def __init__(self):
+        #self.vars = {}
+        #self.csts = {} # constraints
+        #self.var_names={}
         self.functions={}
-        self.variables={}
-        self.jumps={}
-        self.assignments={}
+        #self.variables={}
+        #self.jumps={}
+        #self.assignments={}
 
-    def parse_from(self, lines): # lines is a collection.deque
+    def add_var(self,name):
+        if not name in self.vars:
+            self.vars[name]=Variable(name)
+
+    def parse_from(self, lines): # lines is a list, its every element is a list of tokens
+        is_brace=lambda t:t[0][0] in ["{","}"]
+        braces=list(filter(is_brace,zip(lines,range(len(lines)))))
+        fn=len(braces)
+        for i in range(0,fn,2):
+            lid=braces[i][1]
+            f=Function()
+            f.get_name(lines[lid-1])
+            rid=braces[i+1][1]
+            f.parse_from(lines[lid+1:rid])
+        return
         global index
         index = 0
         while len(lines) > 0:

@@ -10,8 +10,9 @@ def parse(lines):
 def parse_ast(filename):
     fin = open(filename)
     lines = delete_comments(fin.readlines())
-    a=AST()
-    a.parse_from(collections.deque(lines))
+    token_lines=list(map(get_tokens,lines))
+    a=CFGraph()
+    a.parse_from(token_lines)
     return a
     #get_tokens("".join(lines))
     #print(lines)
