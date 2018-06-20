@@ -9,7 +9,7 @@ def parse(lines):
 
 def parse_ast(filename):
     fin = open(filename)
-    lines = delete_comments(fin.readlines())
+    lines = delete_empty_lines(fin.readlines())
     token_lines=list(map(get_tokens,lines))
     a=CFGraph()
     a.parse_from(token_lines)

@@ -2,8 +2,8 @@ import os
 import sys
 import re
 
-def delete_comments(lines):
-    f = lambda L:L.lstrip(' ')[0]!='#' and L.rstrip(' \n')!=""
+def delete_empty_lines(lines):
+    f = lambda L:L.rstrip(' \n')!=""
     return list(filter(f,lines))
 
 def get_tokens(S):
