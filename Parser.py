@@ -4,10 +4,8 @@ from ConstraintGraph import *
 
 index = 0
 
-#class Variable(object):
-#    def __init__(self,typ,name):
-#        self.typ=typ
-#        self.name=name
+def not_num(name):
+    return not name[0].isdigit()
 
 def replace_list(A,replace_dict):
     n=len(A)
@@ -16,12 +14,17 @@ def replace_list(A,replace_dict):
             A[i]=replace_dict[A[i]]
     return A
 
-class Expression:
+class Condition:
     def __init__(self):
         self.ops=[]
         self.opt=""
     def __str__(self):
-        return "EXP# "+self.opt+",".join(self.ops)
+        return "CND# "+self.opt+",".join(self.ops)
+    def build_cst_graph(self,var_dict,cst_dict):
+        for v in self.ops:
+            if not_num(v):
+                if not v in var_dict:
+                    var_dict[v]=Variable(v)
 
 class Assignment(object):
     def __init__(self):
@@ -32,6 +35,11 @@ class Assignment(object):
         self.ops=replace_list(self.ops,D)
     def __str__(self):
         return "IST# "+self.dst+"="+self.opt+",".join(self.ops)
+    def add_vars(self,var_dict):
+        for v in self.ops:
+            if not_num(v):
+                if not v in var_dict:
+                    var_dict[v]=Variable(v)
 
 class Phi(object):
     def __init__(self,src1,src2,dst):
@@ -42,6 +50,11 @@ class Phi(object):
         self.src1,self.src2,self.dst=tuple(replace_list([self.src1,self.src2,self.dst],D))
     def __str__(self):
         return "PHI# "+self.dst+"=phi("+self.src1+","+self.src2+")"
+    def add_vars(self,var_dict):
+        for v in [self.src1,self.src2,self.dst]:
+            if not_num(v):
+                if not v in var_dict:
+                    var_dict[v]=Variable(v)
 
 class Block(object):
 
@@ -55,11 +68,17 @@ class Block(object):
     def __str__(self):
         return self.name+":\n"+"\n".join(map(str,self.ists))+"\nGOTO# "+str(self.goto)
 
+    def get_vars(self,var_dict):
+        for i in self.ists:
+            i.get_vars(var_dict)
+        if len(self.goto)==2:
+            self.jmp_cnd.get_vars(var_dict)
+
     def get_condition(self,line_tokens):
         assert(line_tokens[1]=='(')
         #print("get_condition: ",line_tokens)
         n=len(line_tokens)
-        c=Expression()
+        c=Condition()
         for i in range(2,n):
             t=line_tokens[i]
             if t==')':
@@ -167,15 +186,13 @@ class Function(object):
         #self.name=name
         self.blocks={}
         self.entry,self.out=None,None
+
+    def get_vars(self,var_dict):
+        for (name,b) in self.blocks.items():
+            b.get_vars()
     
     def get_name(self,tokens):
         self.name=tokens[0]
-
-    def new_variable(self,typ,name):
-        s=self.name+'_'+name
-        v = Variable(typ,s)
-        self.ast.variables[s]=v
-        return v
 
     def get_arglist(self,line_tokens):
         self.arglist = []
@@ -243,10 +260,6 @@ class CFGraph(object):
         #self.jumps={}
         #self.assignments={}
 
-    def add_var(self,name):
-        if not name in self.vars:
-            self.vars[name]=Variable(name)
-
     def parse_from(self, lines): # lines is a list, its every element is a list of tokens
         is_brace=lambda t:t[0][0] in ["{","}"]
         braces=list(filter(is_brace,zip(lines,range(len(lines)))))
@@ -271,5 +284,9 @@ class CFGraph(object):
                 f = Function(nm)
                 f.parse_from(lines,self)
                 self.functions[nm]=f
+
+    def build_cst_graph(self,var_dict,cst_dict):
+        for name,f in self.functions.items():
+            f.get_vars(var_dict)
 
 
