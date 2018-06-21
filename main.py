@@ -2,21 +2,20 @@ import collections
 from LexicalAnalyzer import *
 from Parser import *
 
-
-def parse(lines):
-    for i in range(len(lines)):
-        L = lines[i]
-
-def parse_ast(filename):
+def parse_cfg(filename):
     fin = open(filename)
     lines = delete_empty_lines(fin.readlines())
     token_lines=list(map(get_tokens,lines))
-    a=CFGraph()
-    a.parse_from(token_lines)
-    return a
+    c_graph=CFGraph()
+    c_graph.parse_from(token_lines)
+    return c_graph
     #get_tokens("".join(lines))
     #print(lines)
     #print(get_tokens("".join(lines)))
 
 if __name__=="__main__":
-    ast=parse_ast(sys.argv[1])
+    CFG=parse_cfg(sys.argv[1])
+    #print(CFG.functions["foo"])
+    CST=CFG.build_cst_graph()
+    #print(CST)
+    CST.analyze()

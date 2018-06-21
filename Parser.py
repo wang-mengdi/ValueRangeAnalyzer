@@ -2,10 +2,10 @@ import collections
 from LexicalAnalyzer import *
 from ConstraintGraph import *
 
-index = 0
+#unified format: ops=(op1, op2, output), out="+" or "/" or ">"...
 
 def not_num(name):
-    return not name[0].isdigit()
+    return not (name[0].isdigit() or name[0] in ('+','-'))
 
 def replace_list(A,replace_dict):
     n=len(A)
@@ -14,47 +14,93 @@ def replace_list(A,replace_dict):
             A[i]=replace_dict[A[i]]
     return A
 
+def replace_ist(ist,replace_dict):
+    ist.ops=replace_list(ist.ops,replace_dict)
+
+def condition_revert(t): # a t b iff b revert(t) a, i.e. converse
+    D={'<':'>','<=':'>=','>':'<','>=':'<='}
+    assert(t in D)
+    return D[t]
+
+def condition_not(t): # a t b==False iff a not(t) b, i.e. inverse
+    D={'<':'>=','<=':'>','>':'<=','>=':'<'}
+    assert(t in D)
+    return D[t]
+
 class Condition:
-    def __init__(self):
-        self.ops=[]
-        self.opt=""
+    def __init__(self,name="CND",ops=(),opt=""):
+        self.typ="CND"
+        self.name=name
+        self.ops=ops
+        self.opt=opt
+        self.to=[]
     def __str__(self):
-        return "CND# "+self.opt+",".join(self.ops)
-    def build_cst_graph(self,var_dict,cst_dict):
+        return self.name+" "+self.opt+"("+",".join(self.ops)+")  to=("+",".join(self.to)+")"
+        #return "CND# "+self.opt+",".join(self.ops)
+    def build_cst_graph(self,name_pref,var_dict,cst_dict):
         for v in self.ops:
             if not_num(v):
                 if not v in var_dict:
                     var_dict[v]=Variable(v)
+        #print(self.ops)
+        assert(len(self.ops)==2)
+        v1,v2=self.ops
+        t=self.opt
+        if not_num(v1):
+            #true branch of v1
+            if not v1+"@t" in var_dict:
+                var_dict[v1+'@t']=Variable(v1+'@t')
+            ct1=Condition(name_pref+"#t1$CND",[v1,v2,v1+"@t"],t)
+            cst_dict[ct1.name]=ct1
+            #false branch of v1
+            if not v1+"@f" in var_dict:
+                var_dict[v1+'@f']=Variable(v1+'@f')
+            cf1=Condition(name_pref+"#f1$CND",[v1,v2,v1+'@f'],condition_not(t))
+            cst_dict[cf1.name]=cf1
+        if not_num(v2):
+            #true branch of v2
+            if not v2+"@t" in var_dict:
+                var_dict[v2+'@t']=Variable(v2+'@t')
+            ct2=Condition(name_pref+"#t2$CND",[v2,v1,v2+"@t"],condition_revert(t))
+            cst_dict[ct2.name]=ct2
+            #false branch of v2
+            if not v2+"@f" in var_dict:
+                var_dict[v2+'@f']=Variable(v2+'@f')
+            cf2=Condition(name_pref+"#f2$CND",[v2,v1,v2+'@f'],condition_not(condition_revert(t)))
+            cst_dict[cf2.name]=cf2
+
 
 class Assignment(object):
-    def __init__(self):
-        self.ops = []
-        self.opt=""
-        self.dst=""
-    def replace(self,D):
-        self.ops=replace_list(self.ops,D)
+    def __init__(self,name="IST",ops=(),opt=""):
+        self.typ="IST"
+        self.name,self.ops,self.opt=name,ops,opt
+        self.to=[]
     def __str__(self):
-        return "IST# "+self.dst+"="+self.opt+",".join(self.ops)
-    def add_vars(self,var_dict):
+        return self.name+" "+self.opt+"("+",".join(self.ops)+")"+"  to=("+",".join(self.to)+")"
+        #$return "IST# "+self.dst+"="+self.opt+",".join(self.ops)
+    def build_cst_graph(self,name_pref,var_dict,cst_dict):
         for v in self.ops:
             if not_num(v):
                 if not v in var_dict:
                     var_dict[v]=Variable(v)
+        a=Assignment(name_pref+"$IST",self.ops,self.opt)
+        cst_dict[a.name]=a
 
 class Phi(object):
-    def __init__(self,src1,src2,dst):
-        self.src1=src1
-        self.src2=src2
-        self.dst=dst
-    def replace(self,D):
-        self.src1,self.src2,self.dst=tuple(replace_list([self.src1,self.src2,self.dst],D))
+    def __init__(self,name="PHI",ops=[]):
+        self.typ="PHI"
+        self.name,self.ops,self.opt=name,ops,"phi"
+        self.to=[]
     def __str__(self):
-        return "PHI# "+self.dst+"=phi("+self.src1+","+self.src2+")"
-    def add_vars(self,var_dict):
-        for v in [self.src1,self.src2,self.dst]:
+        return self.name+" "+self.opt+"("+",".join(self.ops)+")  to=("+",".join(self.to)+")"
+        #return "PHI# "+self.dst+"=phi("+self.src1+","+self.src2+")"
+    def build_cst_graph(self,name_pref,var_dict,cst_dict):
+        for v in self.ops:
             if not_num(v):
                 if not v in var_dict:
                     var_dict[v]=Variable(v)
+        p=Phi(name_pref+"$PHI",self.ops)
+        cst_dict[p.name]=p
 
 class Block(object):
 
@@ -66,41 +112,50 @@ class Block(object):
         self.parsed=False
 
     def __str__(self):
-        return self.name+":\n"+"\n".join(map(str,self.ists))+"\nGOTO# "+str(self.goto)
+        S=self.name+":\n"+"\n".join(map(str,self.ists))
+        if len(self.goto)>1:
+            assert(len(self.goto)==2)
+            S=S+"\n"+str(self.jmp_cnd)
+        return S+"\n$GOTO "+str(self.goto)
 
-    def get_vars(self,var_dict):
-        for i in self.ists:
-            i.get_vars(var_dict)
+    def build_cst_graph(self,name_pref,var_dict,cst_dict):
+        name_pref=name_pref+self.name
+        n=len(self.ists)
+        for k in range(n):
+            i=self.ists[k]
+            i.build_cst_graph("{}{:0>2d}".format(name_pref,k),var_dict,cst_dict)
         if len(self.goto)==2:
-            self.jmp_cnd.get_vars(var_dict)
+            self.jmp_cnd.build_cst_graph("{}{:0>2d}".format(name_pref,n),var_dict,cst_dict)
 
     def get_condition(self,line_tokens):
         assert(line_tokens[1]=='(')
         #print("get_condition: ",line_tokens)
         n=len(line_tokens)
-        c=Condition()
+        ops,opt=[],None
         for i in range(2,n):
             t=line_tokens[i]
             if t==')':
                 break
             elif t=='<' or t=='>' or t=='<=' or t=='>=' or t=='==' or t=='!=':
-                c.opt=t
+                opt=t
             else:
-                c.ops.append(t)
-        return c
+                ops.append(t)
+        assert(opt!=None)
+        return Condition(ops=tuple(ops),opt=opt)
 
     def get_assignment(self,line_tokens):
-        a=Assignment()
         n=len(line_tokens)
-        a.dst=line_tokens[0]
+        dst=line_tokens[0]
         assert(line_tokens[1]=='=')
+        ops,opt=[],"" # this may be a unary operate, thus without opt
         for i in range(2,n-1):
             t=line_tokens[i]
             if t=='+' or t=='-' or t=='*' or t=='/':
-                a.opt=t
+                opt=t
             else:
-                a.ops.append(t)
-        return a
+                ops.append(t)
+        ops.append(dst)
+        return Assignment(ops=tuple(ops),opt=opt)
 
     def get_goto(self,tokens,blocks):
         assert(tokens[-1]==';')
@@ -110,7 +165,7 @@ class Block(object):
 
     def replace(self,D):
         for i in self.ists:
-            i.replace(D)
+            replace_ist(i,D)
 
     def dfs_replace(self,name,blocks,rep_dict,visited):
         #print("dfs replace if with {} of {}".format(self.name,name))
@@ -155,7 +210,7 @@ class Block(object):
                 src1=tokens[5]
                 assert(tokens[6]=='(' and tokens[8]==')' and tokens[9]==',')
                 src2=tokens[10]
-                self.ists.append(Phi(src1,src2,dst))
+                self.ists.append(Phi(ops=[src1,src2,dst]))
                 #map(self.ast.add_var,[tgt,src1,src2])
                 #ast.csts[index]=Phi(src1,src2,tgt)
                 #index += 1
@@ -187,9 +242,12 @@ class Function(object):
         self.blocks={}
         self.entry,self.out=None,None
 
-    def get_vars(self,var_dict):
+    def __str__(self):
+        return "\n".join(map(str,[b for (m,b) in self.blocks.items()]))
+
+    def build_cst_graph(self,var_dict,cst_dict):
         for (name,b) in self.blocks.items():
-            b.get_vars()
+            b.build_cst_graph(self.name,var_dict,cst_dict)
     
     def get_name(self,tokens):
         self.name=tokens[0]
@@ -245,7 +303,7 @@ class Function(object):
             self.blocks[b.name]=b
         self.entry,self.out=B[0].name,B[-1].name
         self.dfs_parse_block(self.entry)
-        self.replace_if()
+        #self.replace_if()
         #for (name,b) in self.blocks.items():
         #    print(b,"\n")
 
@@ -259,6 +317,8 @@ class CFGraph(object):
         #self.variables={}
         #self.jumps={}
         #self.assignments={}
+    def __str__(self):
+        return "=================\n".join(map(str,[f for (m,f) in self.functions.items()]))
 
     def parse_from(self, lines): # lines is a list, its every element is a list of tokens
         is_brace=lambda t:t[0][0] in ["{","}"]
@@ -270,23 +330,23 @@ class CFGraph(object):
             f.get_name(lines[lid-1])
             rid=braces[i+1][1]
             f.parse_from(lines[lid+1:rid])
-        return
-        global index
-        index = 0
-        while len(lines) > 0:
-            tokens = get_tokens(lines.popleft())
-            if tokens[0]=='#': # comment
-                index += 1
-                pass
-            elif tokens[0]==';;': # function prototype
-                assert(tokens[1]=='Function')
-                nm=tokens[2]
-                f = Function(nm)
-                f.parse_from(lines,self)
-                self.functions[nm]=f
+            self.functions[f.name]=f
 
-    def build_cst_graph(self,var_dict,cst_dict):
+    def build_cst_graph(self):
+        G=CSTGraph()
+        assert(len(self.functions)==1)
         for name,f in self.functions.items():
-            f.get_vars(var_dict)
+            f.build_cst_graph(G.vars,G.csts)
+        for name,c in G.csts.items():
+            c.to=(c.ops[-1],)
+            O=c.ops[:-1]
+            if c.typ=="CND":
+                assert(len(c.ops)==3)
+                O=c.ops[:1]
+                c.future=(c.ops[1],)
+            for v in O:
+                if not_num(v):
+                    G.vars[v].to.append(name)
+        return G
 
 
