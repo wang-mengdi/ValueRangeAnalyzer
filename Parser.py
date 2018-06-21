@@ -222,9 +222,9 @@ class Block(object):
         #b.replace(rep_dict)
         for k in range(n):
             ist=b.ists[k]
-            if ist.ops[-1] in rep_dict:
+            if ist.ops[-1] in r1:
                 r1.pop(ist.ops[-1])
-            replace_ist(ist,rep_dict)
+            replace_ist(ist,r1)
         if not b.cross_func_jump:
             for nxt in b.goto:
                 self.DFS_replace(nxt,block_dict,r1,visited)

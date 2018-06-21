@@ -101,14 +101,14 @@ def ext_mul(a,b):
     if '+' in (a,b):
         if(b=='+'):
             a,b=b,a
-        if b=='-' or b<0:
+        if ext_sgn(b)<0:
             return '-'
         else:
             return '+'
     if '-' in (a,b):
         if b=='-':
             a,b=b,a
-        if b=='-' or b<0:
+        if ext_sgn(b)<0:
             return '+'
         else:
             return '-'
@@ -154,13 +154,13 @@ def calc_itv(a,b,opt):
     if '@' in (a.l,a.r,b.l,b.r):
         return Interval('@','@')
     if opt=='+':
-        #print("calc itv with +: l={},r={}".format(ext_add(a.l,b.l),ext_add(a.r,b.r)))
         return Interval(ext_add(a.l,b.l),ext_add(a.r,b.r))
     elif opt=='-':
         return calc_itv(a,itv_neg(b),'+')
     elif opt=='*':
-        res=[ext_mul(i,j) for i in (a.l,a.r) for j in range()]
+        res=[ext_mul(i,j) for i in (a.l,a.r) for j in (b.l,b.r)]
         l,r=ext_min_list(res),ext_max_list(res)
+        print("calc itv with *: a={},b={},res={}".format(a,b,Interval(l,r)))
         return Interval(l,r)
     elif opt=='/':
         return calc_itv(a,itv_inv(b),'*')
@@ -362,8 +362,8 @@ class CSTGraph:
         itv1,itv2=self.get_itv(v1),self.get_itv(v2)
         opt=x.opt
         assert(opt in ('==','!=','<','>','<=','>='))
-        print("apply node future: {}".format(x))
-        print("itv1={},itv2={}".format(itv1,itv2))
+        #print("apply node future: {}".format(x))
+        #print("itv1={},itv2={}".format(itv1,itv2))
         if opt=='==':
             itvn=cnd_intersect(itv1,Interval(itv2.l,itv2.r))
         elif opt=='!=':
@@ -424,6 +424,7 @@ class CSTGraph:
         self.mark_indeg()
         self.pure_innodes=tuple(filter(lambda t:t.indeg==0,self.all_nodes()))
         for p in self.pure_innodes:
+            print("pure innode: ",p.name)
             assert(p.typ=="IST" or p.name in self.args) # unary assignments
 
     def Tarjan(self,u): # u is a name
@@ -463,13 +464,13 @@ class CSTGraph:
     def analyze(self):
         self.apply_unary()
         self.get_SCC()
-        #for i in range(len(self.sccs)):
-        #    print(self.sccs[i].nodenames)
+        self.dump_dot("/home/cstdio/log.txt")
+        for i in range(len(self.sccs)):
+            print(self.sccs[i].nodenames)
         self.propagated=set()
         self.widen_along_sccs()
         print("applying future:")
         self.apply_future()
-        self.dump_dot("/home/cstdio/log.txt")
         print("narrowing:")
         self.narrow_along_sccs()
         for v in self.all_vars():
