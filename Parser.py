@@ -205,9 +205,15 @@ class Block(object):
             if tokens[0]=='#': # PHI operation
                 dst=tokens[1]
                 assert(tokens[2]=='=' and tokens[3]=='PHI' and tokens[4]=='<')
-                src1=tokens[5]
-                assert(tokens[6]=='(' and tokens[8]==')' and tokens[9]==',')
-                src2=tokens[10]
+                assert(tokens[-1]=='>')
+                k=tokens.index(',')
+                ts1,ts2=tokens[5:k],tokens[k+1:-1]
+                src1=ts1[0]
+                if 'D' in ts1:
+                    src1=src1.split('_')[0] # if it's k_1, it is k, actually
+                src2=ts2[0]
+                if 'D' in ts2:
+                    src2=src2.split('_')[0]
                 self.ists.append(Phi(ops=[src1,src2,dst]))
                 #map(self.ast.add_var,[tgt,src1,src2])
                 #ast.csts[index]=Phi(src1,src2,tgt)
@@ -243,23 +249,25 @@ class Function(object):
     def __str__(self):
         return "\n".join(map(str,[b for (m,b) in self.blocks.items()]))
 
-    def build_cst_graph(self,var_dict,cst_dict):
+    def build_cst_graph(self,args,var_dict,cst_dict):
+        for v in self.arglist:
+            if not v in var_dict:
+                var_dict[v]=Variable(v)
+                args.append(v)
         for (name,b) in self.blocks.items():
             b.build_cst_graph(self.name,var_dict,cst_dict)
     
     def get_name(self,tokens):
         self.name=tokens[0]
-
-    def get_arglist(self,line_tokens):
         self.arglist = []
-        n = len(line_tokens)
+        n = len(tokens)
         #print("get_arglist: ",line_tokens)
-        assert(line_tokens[1]=='(')
+        assert(tokens[1]=='(')
         i = 2
         while i<n:
-            t=line_tokens[i]
+            t=tokens[i]
             if t=='int' or t=='float':
-                self.arglist.append(new_variable(t,line_tokens[i+1]))
+                self.arglist.append(tokens[i+1])
                 i += 2
             elif t==',':
                 i += 1
@@ -334,7 +342,7 @@ class CFGraph(object):
         G=CSTGraph()
         assert(len(self.functions)==1)
         for name,f in self.functions.items():
-            f.build_cst_graph(G.vars,G.csts)
+            f.build_cst_graph(G.args,G.vars,G.csts)
         for name,c in G.csts.items():
             c.to=(c.ops[-1],)
             O=c.ops[:-1]

@@ -1,4 +1,5 @@
 from functools import reduce
+from LexicalAnalyzer import *
 
 def not_num(name):
     return not (name[0].isdigit() or name[0] in ('+','-'))
@@ -9,16 +10,8 @@ def is_integer(s):
 def smart_turn_number(s):
     return (int(s),"int") if is_integer(s) else (float(s),"float")
 
-class Interval:
-    def __init__(self,l='-',r='+'):
-        if(l!='-' and r!='+'):
-            assert(l<=r)
-        self.l=l
-        self.r=r
-    def __str__(self):
-        return "({},{})".format(self.l,self.r)
-
 def ext_lt(a,b):
+    assert '@' not in (a,b)
     if a==b:
         return False
     if a=='-' or b=='+':
@@ -30,7 +23,20 @@ def ext_lt(a,b):
 def ext_gt(a,b):
     return ext_lt(b,a)
 
+class Interval:
+    def __init__(self,l='-',r='+'):
+        if l=='@' or r=='@':
+            self.l,self.r='@','@'
+            return
+        assert not ext_gt(l,r)
+        self.l=l
+        self.r=r
+    def __str__(self):
+        return "({},{})".format(self.l,self.r)
+
+
 def ext_min(a,b): #a,b could be '-','+',or number
+    assert '@' not in (a,b)
     if a=='-' or b=='-':
         return '-'
     if a=='+':
@@ -40,6 +46,7 @@ def ext_min(a,b): #a,b could be '-','+',or number
     return min(a,b)
 
 def ext_max(a,b): #a,b could be '-','+',or number
+    assert '@' not in (a,b)
     if a=='+' or b=='+':
         return '+'
     if a=='-':
@@ -55,6 +62,7 @@ def ext_max_list(a):
     return reduce(ext_max,a)
 
 def ext_sgn(a):
+    assert a!='@'
     if a=='-':
         return -1
     elif a=='+':
@@ -67,6 +75,7 @@ def ext_sgn(a):
         return -1
 
 def ext_neg(a):
+    assert a!='@'
     if a=='-':
         return '+'
     elif a=='+':
@@ -75,17 +84,18 @@ def ext_neg(a):
         return -a
 
 def ext_add(a,b):
+    assert '@' not in (a,b)
     assert(not ('+' in (a,b) and '-' in (a,b)))
     if '+' in (a,b):
         return '+'
     if '-' in (a,b):
         return '-'
     return a+b
-
 def ext_sub(a,b):
     return ext_add(a,ext_neg(b))
 
 def ext_mul(a,b):
+    assert '@' not in (a,b)
     if 0 in (a,b): # note that out inf is not real inf, it's a number
         return 0
     if '+' in (a,b):
@@ -105,17 +115,31 @@ def ext_mul(a,b):
     return a*b
 
 def phi_union(a,b): #a,b are two intervals, it is specially permitted for phi that a or b could be None
-    if a==None:
+    if a==None or '@' in (a.l,a.r):
         return b
-    elif b==None:
+    elif b==None or '@' in (b.l,b.r):
         return a
     return Interval(ext_min(a.l,b.l),ext_max(a.r,b.r))
 
+def cnd_intersect(a,b):
+    if '@' in (a.l,a.r,b.l,b.r):
+        return Interval('@','@')
+    l=ext_max(a.l,b.l)
+    r=ext_min(a.r,b.r)
+    if ext_gt(l,r):
+        return Interval('@','@')
+    else:
+        return Interval(l,r)
+
 def itv_neg(a):
+    if '@' in (a.l,a.r):
+        return Interval('@','@')
     l1,r1=ext_neg(a.l),ext_neg(a.r)
     return Interval(ext_min(l1,r1),ext_min(l1,r1))
 
 def itv_inv(a):
+    if '@' in (a.l,a.r):
+        return Interval('@','@')
     sl,sr=ext_sgn(a.l),ext_sgn(a.r)
     assert(sl*sr!=-1)
     if sl<=0 and sr<=0:
@@ -127,6 +151,8 @@ def itv_inv(a):
         r1='+' if a.l==0 else 1/a.l
 
 def calc_itv(a,b,opt):
+    if '@' in (a.l,a.r,b.l,b.r):
+        return Interval('@','@')
     if opt=='+':
         #print("calc itv with +: l={},r={}".format(ext_add(a.l,b.l),ext_add(a.r,b.r)))
         return Interval(ext_add(a.l,b.l),ext_add(a.r,b.r))
@@ -144,6 +170,7 @@ def widen_itv(a,a1): # return (result,stabled), stabled = True or False
     stabled=True
     if a==None:
         return (a1,False)
+    assert '@' not in (a.l,a.r,a1.l,a1.r) # widening operation goes first, so cannot have '@'
     if ext_lt(a1.l,a.l):
         l='-'
         stabled=False
@@ -157,6 +184,12 @@ def widen_itv(a,a1): # return (result,stabled), stabled = True or False
     return (Interval(l,r),stabled)
 
 def narrow_itv(a,a1): # return (result,stabled), just like widen
+    if '@' in (a.l,a.r,a1.l,a1.r):
+        it=Interval('@','@')
+        if a.l=='@' and a.r=='@':
+            return it,True
+        else:
+            return it,False
     print("narrow interval {} to {}".format(a,a1))
     stabled = True
     # it's after widening, so a cannot be None
@@ -257,6 +290,7 @@ class CSTGraph:
     def __init__(self):
         self.vars={}
         self.csts={}
+        self.args=[]
     def __str__(self):
         var_names=[m for (m,v) in self.vars.items()]
         SV="\n".join(str(self.vars[m]) for m in sorted(var_names))
@@ -268,6 +302,17 @@ class CSTGraph:
             return self.vars[name]
         else:
             return self.csts[name]
+
+    def read_arg_bound(self,filename):
+        fin=open(filename)
+        lines=delete_empty_lines(fin.readlines())
+        for t in lines:
+            v,l,r=t.split(' ')
+            if not l in ('-','+'):
+                l=int(l)
+            if not r in ('-','+'):
+                r=int(r)
+            self.vars[v].itv=Interval(l,r)
 
     def all_cst_names(self):
         return [m for (m,c) in self.csts.items()]
@@ -317,16 +362,16 @@ class CSTGraph:
         itv1,itv2=self.get_itv(v1),self.get_itv(v2)
         opt=x.opt
         assert(opt in ('<','>','<=','>='))
-        #print("apply node future: {}".format(x))
-        #print("itv1={},itv2={}".format(itv1,itv2))
+        print("apply node future: {}".format(x))
+        print("itv1={},itv2={}".format(itv1,itv2))
         if opt=='<':
-            itvn=Interval(itv1.l,ext_min(itv1.r,ext_sub(itv2.r,1)))
+            itvn=cnd_intersect(itv1,Interval('-',ext_sub(itv2.r,1)))
         elif opt=='<=':
-            itvn=Interval(itv1.l,ext_min(itv1.r,itv2.r))
+            itvn=cnd_intersect(itv1,Interval('-',itv2.r))
         elif opt=='>':
-            itvn=Interval(ext_max(itv1.l,ext_add(itv2.l,1)),itv1.r)
+            itvn=cnd_intersect(itv1,Interval(ext_add(itv2.l,1),'+'))
         elif opt=='>=':
-            itvn=Interval(ext_max(itv1.l,itv2.l),itv1.r)
+            itvn=cnd_intersect(itv1,Interval(itv2.l,'+'))
         self[dst].itv=itvn
         #print("after applying, itv of k_1 is {}".format(self["k_1"].itv))
 
@@ -370,11 +415,13 @@ class CSTGraph:
         for p in self.all_nodes():
             for y in p.to:
                 self[y].indeg+=1
+
     def apply_unary(self):
         self.mark_indeg()
         self.pure_innodes=tuple(filter(lambda t:t.indeg==0,self.all_nodes()))
         for p in self.pure_innodes:
-            assert(p.typ=="IST") # unary assignments
+            assert(p.typ=="IST" or p.name in self.args) # unary assignments
+
     def Tarjan(self,u): # u is a name
         self.time_stamp+=1
         self.dfn[u],self.low[u]=self.time_stamp,self.time_stamp

@@ -17,5 +17,6 @@ if __name__=="__main__":
     CFG=parse_cfg(sys.argv[1])
     #print(CFG.functions["foo"])
     CST=CFG.build_cst_graph()
+    CST.read_arg_bound(sys.argv[2])
     print(CST)
     CST.analyze()
