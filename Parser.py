@@ -191,7 +191,7 @@ class Block(object):
         self.dfs_replace(self.goto[1],blocks,D,vis_false)
         assert(len(vis_true&vis_false)==1)
 
-    def parse(self,blocks):
+    def parse(self,blocks,fun):
         #print("parse block:{}".format(self.name))
         #print("lines:{}".format(self.lines))
         ln=len(self.lines)
@@ -228,7 +228,8 @@ class Block(object):
                 self.goto=(jmp_true,jmp_false)
                 i += 3
             elif tokens[0]=='return':
-                self.rtn_var=tokens[1]
+                #print("return spotted\n")
+                fun.rtn_var=tokens[1]
             else: # an assignment
                 ist=self.get_assignment(tokens)
                 self.ists.append(ist)
@@ -241,10 +242,8 @@ class Block(object):
 class Function(object):
 
     def __init__(self):
-        #self.jumpmap={}
-        #self.name=name
         self.blocks={}
-        self.entry,self.out=None,None
+        self.rtn_var=None
 
     def __str__(self):
         return "\n".join(map(str,[b for (m,b) in self.blocks.items()]))
@@ -283,7 +282,7 @@ class Function(object):
         b=self.blocks[bname]
         if b.parsed:
             return
-        b.parse(self.blocks)
+        b.parse(self.blocks,self)
         for nxt in b.goto:
             self.dfs_parse_block(nxt)
 
@@ -292,12 +291,12 @@ class Function(object):
         #print("function: {}, lines:{}".format(self.name,lines))
         bbs=list(filter(is_bb,zip(lines,range(len(lines)))))
         bbs=bbs+[(None,-1),] # to deal with the final block
+        lines=lines+[[],]
         bn=len(bbs)
         B=[]
         for i in range(bn-1):
             lid,rid=bbs[i][1],bbs[i+1][1]
             tokens=lines[lid]
-            #print(tokens)
             assert(tokens[0]=='<' and tokens[-2]=='>' and tokens[-1]==':')
             b=Block("".join(tokens[:-1]))
             b.lines=lines[lid:rid]
@@ -343,6 +342,7 @@ class CFGraph(object):
         assert(len(self.functions)==1)
         for name,f in self.functions.items():
             f.build_cst_graph(G.args,G.vars,G.csts)
+            G.rtn_var=f.rtn_var
         for name,c in G.csts.items():
             c.to=(c.ops[-1],)
             O=c.ops[:-1]

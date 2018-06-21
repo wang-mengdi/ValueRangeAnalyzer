@@ -470,3 +470,5 @@ class CSTGraph:
         self.narrow_along_sccs()
         for v in self.all_vars():
             print("{} now bound {}".format(v.name,v.itv))
+        rtv=self.vars[self.rtn_var].itv
+        print("result: [{},{}]".format(rtv.l,rtv.r))
