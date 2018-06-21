@@ -307,7 +307,7 @@ class CSTGraph:
         fin=open(filename)
         lines=delete_empty_lines(fin.readlines())
         for t in lines:
-            v,l,r=t.split(' ')
+            v,l,r=t.rstrip('\n').split(' ')
             if not l in ('-','+'):
                 l=int(l)
             if not r in ('-','+'):
@@ -361,10 +361,14 @@ class CSTGraph:
         v1,v2,dst=x.ops
         itv1,itv2=self.get_itv(v1),self.get_itv(v2)
         opt=x.opt
-        assert(opt in ('<','>','<=','>='))
+        assert(opt in ('==','!=','<','>','<=','>='))
         print("apply node future: {}".format(x))
         print("itv1={},itv2={}".format(itv1,itv2))
-        if opt=='<':
+        if opt=='==':
+            itvn=cnd_intersect(itv1,Interval(itv2.l,itv2.r))
+        elif opt=='!=':
+            itvn=cnd_intersect(itv1,Interval('-','+'))
+        elif opt=='<':
             itvn=cnd_intersect(itv1,Interval('-',ext_sub(itv2.r,1)))
         elif opt=='<=':
             itvn=cnd_intersect(itv1,Interval('-',itv2.r))

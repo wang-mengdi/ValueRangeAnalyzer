@@ -11,8 +11,8 @@ def get_tokens(S):
     re_str = r"PHI|int|float|goto|if|else|Function|return"\
             "|\d+\.\d+[eE][-+]?\d+|\d+\.\d+|[+-]?\d+"\
             "|[a-zA-Z_]\.\d+|[a-zA-Z_]\w*"\
-            "|\+|\-|\*|/|="\
             "|<=|<|>=|>|==|!="\
+            "|\+|\-|\*|/|="\
             "|\(|\)|\{|\}|,|;;|;|:|#"
     patterns = re.compile(re_str)
     tokens = patterns.findall(S)
