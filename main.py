@@ -19,4 +19,3 @@ if __name__=="__main__":
     CST=CFG.build_cst_graph()
     print(CST)
     CST.analyze()
-    CST.print_dot("/home/cstdio/log.txt")

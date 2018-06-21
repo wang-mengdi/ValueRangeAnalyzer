@@ -19,20 +19,34 @@ class Interval:
         return "({},{})".format(self.l,self.r)
 
 def ext_lt(a,b):
-    if a=='+':
+    if a==b:
         return False
-    if b=='+':
+    if a=='-' or b=='+':
         return True
+    if a=='+' or b=='-':
+        return False
     return a<b
 
 def ext_gt(a,b):
     return ext_lt(b,a)
 
 def ext_min(a,b): #a,b could be '-','+',or number
-    return '-' if a=='-' or b=='-' else min(a,b)
+    if a=='-' or b=='-':
+        return '-'
+    if a=='+':
+        return b
+    if b=='+':
+        return a
+    return min(a,b)
 
 def ext_max(a,b): #a,b could be '-','+',or number
-    return '-' if a=='-' or b=='-' else max(a,b)
+    if a=='+' or b=='+':
+        return '+'
+    if a=='-':
+        return b
+    if b=='-':
+        return a
+    return max(a,b)
 
 def ext_min_list(a):
     return reduce(ext_min,a)
@@ -68,6 +82,9 @@ def ext_add(a,b):
         return '-'
     return a+b
 
+def ext_sub(a,b):
+    return ext_add(a,ext_neg(b))
+
 def ext_mul(a,b):
     if 0 in (a,b): # note that out inf is not real inf, it's a number
         return 0
@@ -92,7 +109,7 @@ def phi_union(a,b): #a,b are two intervals, it is specially permitted for phi th
         return b
     elif b==None:
         return a
-    return Interval(ext_min(a.l,b.l),ext_max(a.l,b.l))
+    return Interval(ext_min(a.l,b.l),ext_max(a.r,b.r))
 
 def itv_neg(a):
     l1,r1=ext_neg(a.l),ext_neg(a.r)
@@ -111,6 +128,7 @@ def itv_inv(a):
 
 def calc_itv(a,b,opt):
     if opt=='+':
+        #print("calc itv with +: l={},r={}".format(ext_add(a.l,b.l),ext_add(a.r,b.r)))
         return Interval(ext_add(a.l,b.l),ext_add(a.r,b.r))
     elif opt=='-':
         return calc_itv(a,itv_neg(b),'+')
@@ -138,6 +156,23 @@ def widen_itv(a,a1): # return (result,stabled), stabled = True or False
         r=a.r
     return (Interval(l,r),stabled)
 
+def narrow_itv(a,a1): # return (result,stabled), just like widen
+    print("narrow interval {} to {}".format(a,a1))
+    stabled = True
+    # it's after widening, so a cannot be None
+    assert(a!=None)
+    if ext_gt(a1.l,a.l):
+        l=a1.l
+        stabled=False
+    else:
+        l=a.l
+    if ext_lt(a1.r,a.r):
+        r=a1.r
+        stabled=False
+    else:
+        r=a.r
+    return (Interval(l,r),stabled)
+
 class Variable:
     def __init__(self,name,itv=None):#itv=interval
         self.typ="VAR"
@@ -146,7 +181,8 @@ class Variable:
         self.to=[]
     def __str__(self):
         itv_str="None" if self.itv==None else str(self.itv)
-        return "{} in itv {}".format(self.name,itv_str)+"  to=("+",".join(self.to)+")"
+        #return "{} in itv {}".format(self.name,itv_str)+"  to=("+",".join(self.to)+")"
+        return "{} in itv {}".format(self.name,itv_str)
 
 class SCComponent:
 
@@ -170,14 +206,14 @@ class SCComponent:
             if p.typ=='VAR':
                 p.old_itv=p.itv
 
-    def update_range(self,G):
+    def update_range(self,G,update_fun):
         stabled=True
         for x in self.nodenames:
             p=G[x]
             if p.typ=='VAR':
                 I0=p.old_itv
                 I1=p.itv
-                In,s=widen_itv(I0,I1)
+                In,s=update_fun(I0,I1)
                 stabled=stabled and s
                 p.itv=In
         return stabled
@@ -195,7 +231,26 @@ class SCComponent:
             visited=set()
             x=self.select_propagate_start(G)
             self.DFS_propagate(x,G,visited,ignore_cnd)
-            if self.update_range(G):
+            if self.update_range(G,widen_itv):
+                break
+
+    def select_narrow_start(self,G):
+        if len(self.nodenames)==1:
+            return self.nodenames[0]
+        else:
+            legal_starts=tuple(filter(lambda x:G[x].typ=='CND', self.nodenames))
+            if len(legal_starts)>0:
+                return legal_starts[0]
+            else:
+                return self.nodenames[0]
+
+    def narrow_range(self,G):
+        while True:
+            self.save_old_range(G)
+            visited=set()
+            x=self.select_narrow_start(G)
+            self.DFS_propagate(x,G,visited,ignore_cnd=False)
+            if self.update_range(G,narrow_itv):
                 break
 
 class CSTGraph:
@@ -214,6 +269,8 @@ class CSTGraph:
         else:
             return self.csts[name]
 
+    def all_cst_names(self):
+        return [m for (m,c) in self.csts.items()]
 
     def all_names(self):
         return [m for (m,v) in self.vars.items()]+[m for (m,c) in self.csts.items()]
@@ -224,7 +281,7 @@ class CSTGraph:
     def all_nodes(self):
         return self.all_vars()+self.all_csts()
 
-    def print_dot(self,filename):
+    def dump_dot(self,filename):
         fout = open(filename,"wt")
         print("digraph g {",file=fout)
         ns=self.all_nodes()
@@ -234,7 +291,7 @@ class CSTGraph:
                 shp="ellipse"
             else:
                 shp="box"
-            print("n{}[shape={},label=\"{}\"]".format(i,shp,ns[i].name),file=fout)
+            print("n{}[shape={},label=\"{}\"]".format(i,shp,ns[i]),file=fout)
             d[ns[i].name]=i
         for x in ns:
             for y in x.to:
@@ -249,19 +306,48 @@ class CSTGraph:
             assert(numtyp=="int")
             return Interval(x,x)
 
-    def propagate_node(self,xname,ignore_cnd):
-        assert(ignore_cnd==True)
+    """
+    TODO: here is a potential bug that if the value range degrades to empty interval what will happen?
+    """
+    def apply_node_future(self,xname):
         x=self[xname]
-        #print("propagate node {}, typ={}, ops={}".format(xname,x.typ,x.ops))
+        if x.typ!='CND':
+            return
+        v1,v2,dst=x.ops
+        itv1,itv2=self.get_itv(v1),self.get_itv(v2)
+        opt=x.opt
+        assert(opt in ('<','>','<=','>='))
+        #print("apply node future: {}".format(x))
+        #print("itv1={},itv2={}".format(itv1,itv2))
+        if opt=='<':
+            itvn=Interval(itv1.l,ext_min(itv1.r,ext_sub(itv2.r,1)))
+        elif opt=='<=':
+            itvn=Interval(itv1.l,ext_min(itv1.r,itv2.r))
+        elif opt=='>':
+            itvn=Interval(ext_max(itv1.l,ext_add(itv2.l,1)),itv1.r)
+        elif opt=='>=':
+            itvn=Interval(ext_max(itv1.l,itv2.l),itv1.r)
+        self[dst].itv=itvn
+        #print("after applying, itv of k_1 is {}".format(self["k_1"].itv))
+
+    def apply_future(self):
+        for xname in self.all_cst_names():
+            self.apply_node_future(xname)
+
+    def propagate_node(self,xname,ignore_cnd):
+        x=self[xname]
+        print("propagate node {}, typ={}, ops={}".format(xname,x.typ,x.ops))
         if x.typ=="CND":
             v1,v2,dst=x.ops
             #print("propagate CND, v1={},v2={},dst={}".format(v1,v2,dst))
             if ignore_cnd:
                 self[dst].itv=self[v1].itv
+            else:
+                self.apply_node_future(xname)
         elif x.typ=="PHI":
             assert(len(x.ops)==3)
-            v1,v2,dst=tuple(map(lambda t:self[t],x.ops))
-            dst.itv=phi_union(v1.itv,v2.itv)
+            v1,v2,dst=x.ops
+            self[dst].itv=phi_union(self[v1].itv,self[v2].itv)
         elif x.typ=='IST':
             assert(len(x.ops) in (2,3))
             if len(x.ops)==2: # unary
@@ -276,6 +362,7 @@ class CSTGraph:
                 self[dst].itv=calc_itv(it1,it2,x.opt)
         else:
             assert(x.typ=='VAR')
+        print("afterwhile: {} in {}".format(dst,self[dst].itv))
 
     def mark_indeg(self):
         for p in self.all_nodes():
@@ -312,17 +399,27 @@ class CSTGraph:
             self.Tarjan(p.name)
         self.sccs=self.sccs[::-1]
 
-    def propagate_along_sccs(self):
+    def widen_along_sccs(self):
         n=len(self.sccs)
         for i in range(n):
             self.sccs[i].widen_range(self,ignore_cnd=True)
-    
+
+    def narrow_along_sccs(self):
+        n=len(self.sccs)
+        for i in range(n):
+            self.sccs[i].narrow_range(self)
+
     def analyze(self):
         self.apply_unary()
         self.get_SCC()
         #for i in range(len(self.sccs)):
         #    print(self.sccs[i].nodenames)
         self.propagated=set()
-        self.propagate_along_sccs()
+        self.widen_along_sccs()
+        print("applying future:")
+        self.apply_future()
+        self.dump_dot("/home/cstdio/log.txt")
+        print("narrowing:")
+        self.narrow_along_sccs()
         for v in self.all_vars():
             print("{} now bound {}".format(v.name,v.itv))
