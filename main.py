@@ -17,5 +17,6 @@ if __name__=="__main__":
     CFG=parse_cfg(sys.argv[1])
     #print(CFG.functions["foo"])
     CST=CFG.build_cst_graph()
-    #print(CST)
+    print(CST)
     CST.analyze()
+    CST.print_dot("/home/cstdio/log.txt")

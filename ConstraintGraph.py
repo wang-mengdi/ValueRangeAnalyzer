@@ -1,3 +1,14 @@
+from functools import reduce
+
+def not_num(name):
+    return not (name[0].isdigit() or name[0] in ('+','-'))
+
+def is_integer(s):
+    return s.isdigit() or (s[0]=='-' and s[1:].isdigit())
+
+def smart_turn_number(s):
+    return (int(s),"int") if is_integer(s) else (float(s),"float")
+
 class Interval:
     def __init__(self,l='-',r='+'):
         if(l!='-' and r!='+'):
@@ -7,18 +18,185 @@ class Interval:
     def __str__(self):
         return "({},{})".format(self.l,self.r)
 
+def ext_lt(a,b):
+    if a=='+':
+        return False
+    if b=='+':
+        return True
+    return a<b
+
+def ext_gt(a,b):
+    return ext_lt(b,a)
+
+def ext_min(a,b): #a,b could be '-','+',or number
+    return '-' if a=='-' or b=='-' else min(a,b)
+
+def ext_max(a,b): #a,b could be '-','+',or number
+    return '-' if a=='-' or b=='-' else max(a,b)
+
+def ext_min_list(a):
+    return reduce(ext_min,a)
+
+def ext_max_list(a):
+    return reduce(ext_max,a)
+
+def ext_sgn(a):
+    if a=='-':
+        return -1
+    elif a=='+':
+        return +1
+    elif a==0:
+        return 0
+    elif a>0:
+        return 1
+    elif a<0:
+        return -1
+
+def ext_neg(a):
+    if a=='-':
+        return '+'
+    elif a=='+':
+        return '-'
+    else:
+        return -a
+
+def ext_add(a,b):
+    assert(not ('+' in (a,b) and '-' in (a,b)))
+    if '+' in (a,b):
+        return '+'
+    if '-' in (a,b):
+        return '-'
+    return a+b
+
+def ext_mul(a,b):
+    if 0 in (a,b): # note that out inf is not real inf, it's a number
+        return 0
+    if '+' in (a,b):
+        if(b=='+'):
+            a,b=b,a
+        if b=='-' or b<0:
+            return '-'
+        else:
+            return '+'
+    if '-' in (a,b):
+        if b=='-':
+            a,b=b,a
+        if b=='-' or b<0:
+            return '+'
+        else:
+            return '-'
+    return a*b
+
+def phi_union(a,b): #a,b are two intervals, it is specially permitted for phi that a or b could be None
+    if a==None:
+        return b
+    elif b==None:
+        return a
+    return Interval(ext_min(a.l,b.l),ext_max(a.l,b.l))
+
+def itv_neg(a):
+    l1,r1=ext_neg(a.l),ext_neg(a.r)
+    return Interval(ext_min(l1,r1),ext_min(l1,r1))
+
+def itv_inv(a):
+    sl,sr=ext_sgn(a.l),ext_sgn(a.r)
+    assert(sl*sr!=-1)
+    if sl<=0 and sr<=0:
+        l1='-' if a.r==0 else 1/a.r
+        r1=0 if a.l=='-' else 1/a.l
+        return Interval(l1,r1)
+    else:
+        l1=0 if a.r=='+' else 1/a.r
+        r1='+' if a.l==0 else 1/a.l
+
+def calc_itv(a,b,opt):
+    if opt=='+':
+        return Interval(ext_add(a.l,b.l),ext_add(a.r,b.r))
+    elif opt=='-':
+        return calc_itv(a,itv_neg(b),'+')
+    elif opt=='*':
+        res=[ext_mul(i,j) for i in (a.l,a.r) for j in range()]
+        l,r=ext_min_list(res),ext_max_list(res)
+        return Interval(l,r)
+    elif opt=='/':
+        return calc_itv(a,itv_inv(b),'*')
+
+def widen_itv(a,a1): # return (result,stabled), stabled = True or False
+    #print("widen {} to {}".format(a,a1))
+    stabled=True
+    if a==None:
+        return (a1,False)
+    if ext_lt(a1.l,a.l):
+        l='-'
+        stabled=False
+    else:
+        l=a.l
+    if ext_gt(a1.r,a.r):
+        r='+'
+        stabled=False
+    else:
+        r=a.r
+    return (Interval(l,r),stabled)
+
 class Variable:
-    def __init__(self,name,itv=Interval()):#itv=interval
+    def __init__(self,name,itv=None):#itv=interval
+        self.typ="VAR"
         self.name=name
         self.itv=itv
         self.to=[]
     def __str__(self):
-        return "{} in itv {}".format(self.name,self.itv)+"  to=("+",".join(self.to)+")"
+        itv_str="None" if self.itv==None else str(self.itv)
+        return "{} in itv {}".format(self.name,itv_str)+"  to=("+",".join(self.to)+")"
 
 class SCComponent:
+
     def __init__(self,name,nodenames):
         self.name=name
         self.nodenames=tuple(nodenames)
+
+    def DFS_propagate(self,x,G,visited,ignore_cnd):#x is a name string, G is the whole constraint graph
+        G.propagated.add(x)
+        if not x in self.nodenames or x in visited:
+            return
+        if G[x].typ!="VAR":
+            G.propagate_node(x,ignore_cnd)
+        visited.add(x)
+        for y in G[x].to:
+            self.DFS_propagate(y,G,visited,ignore_cnd)
+
+    def save_old_range(self,G):
+        for x in self.nodenames:
+            p=G[x]
+            if p.typ=='VAR':
+                p.old_itv=p.itv
+
+    def update_range(self,G):
+        stabled=True
+        for x in self.nodenames:
+            p=G[x]
+            if p.typ=='VAR':
+                I0=p.old_itv
+                I1=p.itv
+                In,s=widen_itv(I0,I1)
+                stabled=stabled and s
+                p.itv=In
+        return stabled
+
+    def select_propagate_start(self,G):
+        if len(self.nodenames)==1:
+            return self.nodenames[0]
+        else:
+            legal_starts=tuple(filter(lambda x:x in G.propagated, self.nodenames))
+            return legal_starts[0]
+
+    def widen_range(self,G,ignore_cnd):
+        while True:
+            self.save_old_range(G)
+            visited=set()
+            x=self.select_propagate_start(G)
+            self.DFS_propagate(x,G,visited,ignore_cnd)
+            if self.update_range(G):
+                break
 
 class CSTGraph:
     def __init__(self):
@@ -35,6 +213,8 @@ class CSTGraph:
             return self.vars[name]
         else:
             return self.csts[name]
+
+
     def all_names(self):
         return [m for (m,v) in self.vars.items()]+[m for (m,c) in self.csts.items()]
     def all_vars(self):
@@ -43,6 +223,60 @@ class CSTGraph:
         return [c for (m,c) in self.csts.items()]
     def all_nodes(self):
         return self.all_vars()+self.all_csts()
+
+    def print_dot(self,filename):
+        fout = open(filename,"wt")
+        print("digraph g {",file=fout)
+        ns=self.all_nodes()
+        d={}
+        for i in range(len(ns)):
+            if ns[i].typ=="VAR":
+                shp="ellipse"
+            else:
+                shp="box"
+            print("n{}[shape={},label=\"{}\"]".format(i,shp,ns[i].name),file=fout)
+            d[ns[i].name]=i
+        for x in ns:
+            for y in x.to:
+                print("n{}->n{}".format(d[x.name],d[y]),file=fout)
+        print("}",file=fout)
+
+    def get_itv(self,name):
+        if not_num(name):
+            return self[name].itv
+        else:
+            x,numtyp=smart_turn_number(name)
+            assert(numtyp=="int")
+            return Interval(x,x)
+
+    def propagate_node(self,xname,ignore_cnd):
+        assert(ignore_cnd==True)
+        x=self[xname]
+        #print("propagate node {}, typ={}, ops={}".format(xname,x.typ,x.ops))
+        if x.typ=="CND":
+            v1,v2,dst=x.ops
+            #print("propagate CND, v1={},v2={},dst={}".format(v1,v2,dst))
+            if ignore_cnd:
+                self[dst].itv=self[v1].itv
+        elif x.typ=="PHI":
+            assert(len(x.ops)==3)
+            v1,v2,dst=tuple(map(lambda t:self[t],x.ops))
+            dst.itv=phi_union(v1.itv,v2.itv)
+        elif x.typ=='IST':
+            assert(len(x.ops) in (2,3))
+            if len(x.ops)==2: # unary
+                src,dst=x.ops
+                assert(x.opt=='') # no operator, just like a=b
+                I=self.get_itv(src)
+                self[dst].itv=I
+            else: # binary
+                src1,src2,dst=x.ops
+                it1,it2=self.get_itv(src1),self.get_itv(src2)
+                #print("propagate binary IST, it1={}, it2={}".format(it1,it2))
+                self[dst].itv=calc_itv(it1,it2,x.opt)
+        else:
+            assert(x.typ=='VAR')
+
     def mark_indeg(self):
         for p in self.all_nodes():
             p.indeg=0
@@ -76,9 +310,19 @@ class CSTGraph:
         self.S,self.sccs=[],[]
         for p in self.pure_innodes:
             self.Tarjan(p.name)
+        self.sccs=self.sccs[::-1]
+
+    def propagate_along_sccs(self):
+        n=len(self.sccs)
+        for i in range(n):
+            self.sccs[i].widen_range(self,ignore_cnd=True)
     
     def analyze(self):
         self.apply_unary()
         self.get_SCC()
-        for c in self.sccs:
-            print(c.nodenames)
+        #for i in range(len(self.sccs)):
+        #    print(self.sccs[i].nodenames)
+        self.propagated=set()
+        self.propagate_along_sccs()
+        for v in self.all_vars():
+            print("{} now bound {}".format(v.name,v.itv))

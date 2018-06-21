@@ -4,10 +4,8 @@ from ConstraintGraph import *
 
 #unified format: ops=(op1, op2, output), out="+" or "/" or ">"...
 
-def not_num(name):
-    return not (name[0].isdigit() or name[0] in ('+','-'))
-
 def replace_list(A,replace_dict):
+    A=list(A)
     n=len(A)
     for i in range(n):
         if A[i] in replace_dict:
@@ -303,7 +301,7 @@ class Function(object):
             self.blocks[b.name]=b
         self.entry,self.out=B[0].name,B[-1].name
         self.dfs_parse_block(self.entry)
-        #self.replace_if()
+        self.replace_if()
         #for (name,b) in self.blocks.items():
         #    print(b,"\n")
 
