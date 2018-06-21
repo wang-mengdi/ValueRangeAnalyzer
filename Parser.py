@@ -19,6 +19,7 @@ def replace_list(A,replace_dict):
 
 def replace_ist(ist,replace_dict):
     ist.ops=replace_list(ist.ops,replace_dict)
+    return ist
 
 def condition_revert(t): # a t b iff b revert(t) a, i.e. converse
     D={'<':'>','<=':'>=','>':'<','>=':'<=',"==":'==','!=':'!='}
@@ -212,14 +213,21 @@ class Block(object):
 
     def DFS_replace(self,name,block_dict,rep_dict,visited):
         print("dfs replace if with {} of {},dict={}".format(self.name,name,rep_dict))
-        if name in visited:
+        if name in visited or len(rep_dict)==0:
             return
-        b=block_dict[name]
-        b.replace(rep_dict)
         visited.add(name)
+        b=block_dict[name]
+        n=len(b.ists)
+        r1=rep_dict.copy()
+        #b.replace(rep_dict)
+        for k in range(n):
+            ist=b.ists[k]
+            if ist.ops[-1] in rep_dict:
+                r1.pop(ist.ops[-1])
+            replace_ist(ist,rep_dict)
         if not b.cross_func_jump:
             for nxt in b.goto:
-                self.DFS_replace(nxt,block_dict,rep_dict,visited)
+                self.DFS_replace(nxt,block_dict,r1,visited)
 
     def start_replace_if(self,cfg):
         #print("start replace if: {}".format(self.name))
