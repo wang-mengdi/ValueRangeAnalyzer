@@ -467,7 +467,7 @@ class CSTGraph:
             """
             dst=x.ops[-1]
             if x.phi_bname not in x.src_blks:
-                v1,v2=x.ops
+                v1,v2=x.ops[:-1]
                 self[dst].itv=phi_union(self[v1].itv,self[v2].itv)
             else:
                 print("{} src_blks: {}, phi_bname:{}".format(x.name,x.src_blks,x.phi_bname))
@@ -545,7 +545,6 @@ class CSTGraph:
     def analyze(self):
         self.apply_unary()
         self.get_SCC()
-        self.dump_dot("/home/cstdio/log.txt")
         for i in range(len(self.sccs)):
             print(self.sccs[i].nodenames)
         self.propagated=set()
@@ -558,3 +557,4 @@ class CSTGraph:
             print("{} now bound {}".format(v.name,v.itv))
         rtv=self.vars[self.rtn_var].itv
         print("result: [{},{}]".format(rtv.l,rtv.r))
+        self.dump_dot("/home/cstdio/log.txt")
