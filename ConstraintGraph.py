@@ -32,7 +32,19 @@ class Interval:
         self.l=l
         self.r=r
     def __str__(self):
-        return "({},{})".format(self.l,self.r)
+        s="("
+        if self.l in ('+','-','@'):
+            s=s+self.l
+        else:
+            s=s+"{:0.2f}".format(self.l)
+        s=s+','
+        if self.r in ('+','-','@'):
+            s=s+self.r
+        else:
+            s=s+"{:0.2f}".format(self.r)
+        return s+')'
+        #return "({:0.2f},{:0.2f})".format(self.l,self.r)
+
 
 def turn_end(a,t):
     if a in ('@','+','-'):
@@ -158,8 +170,10 @@ def itv_inv(a):
     else:
         l1=0 if a.r=='+' else 1/a.r
         r1='+' if a.l==0 else 1/a.l
+    return Interval(l1,r1)
 
 def calc_itv(a,b,opt):
+    print("calc itv: {} {} {}".format(a,opt,b))
     if '@' in (a.l,a.r,b.l,b.r):
         return Interval('@','@')
     if opt=='+':
@@ -444,7 +458,7 @@ class CSTGraph:
             else: # binary
                 src1,src2,dst=x.ops
                 it1,it2=self.get_itv(src1),self.get_itv(src2)
-                #print("propagate binary IST, it1={}, it2={}".format(it1,it2))
+                print("propagate binary IST, it1={}, it2={}".format(it1,it2))
                 self[dst].itv=calc_itv(it1,it2,x.opt)
         else:
             assert(x.typ=='VAR')
@@ -502,7 +516,6 @@ class CSTGraph:
     def analyze(self):
         self.apply_unary()
         self.get_SCC()
-        self.dump_dot("/home/cstdio/log.txt")
         for i in range(len(self.sccs)):
             print(self.sccs[i].nodenames)
         self.propagated=set()
@@ -515,3 +528,4 @@ class CSTGraph:
             print("{} now bound {}".format(v.name,v.itv))
         rtv=self.vars[self.rtn_var].itv
         print("result: [{},{}]".format(rtv.l,rtv.r))
+        self.dump_dot("/home/cstdio/log.txt")

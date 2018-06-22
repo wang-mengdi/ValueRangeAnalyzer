@@ -8,6 +8,6 @@ result:
 5 WA
 6 part passed
 7 passed
-8 RE
+8 part passed
 9 WA
 10 RE
