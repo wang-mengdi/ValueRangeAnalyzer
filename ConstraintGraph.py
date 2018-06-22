@@ -329,12 +329,13 @@ class CSTGraph:
         fin=open(filename)
         lines=delete_empty_lines(fin.readlines())
         for t in lines:
-            v,l,r=t.rstrip('\n').split(' ')
+            vname,l,r=t.rstrip('\n').split(' ')
+            v=self.vars['~'+vname]
             if not l in ('-','+'):
-                l=int(l)
+                l=int(l) if v.data=='int' else float(l)
             if not r in ('-','+'):
-                r=int(r)
-            self.vars['~'+v].itv=Interval(l,r)
+                r=int(r) if v.data=='int' else float(l)
+            v.itv=Interval(l,r)
 
     def all_cst_names(self):
         return [m for (m,c) in self.csts.items()]

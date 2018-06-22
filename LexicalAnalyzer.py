@@ -8,7 +8,7 @@ def delete_empty_lines(lines):
 
 def get_tokens(S):
     #print(S)
-    re_str = r"PHI|int|float|goto|if|else|Function|return"\
+    re_str = r"\(int\)|\(float\)|PHI|int|float|goto|if|else|Function|return"\
             "|\d+\.\d+[eE][-+]?\d+|\d+\.\d+|[+-]?\d+"\
             "|[a-zA-Z_]\.\d+|[a-zA-Z_]\w*"\
             "|<=|<|>=|>|==|!="\
@@ -18,5 +18,6 @@ def get_tokens(S):
     tokens = patterns.findall(S)
     sum_tokens = sum(list(map(lambda t:len(t),tokens)))
     sum_text = len(S)-S.count(' ')-S.count('\n')
-    assert(sum_tokens == sum_text, "regex failed")
+    print("sum tokens={}, sum text={}".format(sum_tokens,sum_text))
+    assert sum_tokens == sum_text, "regex failed"
     return tokens

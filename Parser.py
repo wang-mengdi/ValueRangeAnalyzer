@@ -7,6 +7,10 @@ entry_function="foo~"
 
 #unified format: ops=(op1, op2, output), out="+" or "/" or ">"...
 
+def erase_token(tokens,t0):
+    k=tokens.index(t0)
+    return tokens[:k]+tokens[k+1:]
+
 def var_add_pref(pref,var):
     return pref+var if not_num(var) else var
 
@@ -181,6 +185,11 @@ class Block(object):
 
     def get_assignment(self,fun_pref,line_tokens):
         print("get assignment from {},fun_pref={}".format(line_tokens,fun_pref))
+        if '(int)' in line_tokens:
+            line_tokens=erase_token(line_tokens,'(int)')
+        if '(float)' in line_tokens:
+            line_tokens=erase_token(line_tokens,'(float)')
+        assert 'int' not in line_tokens and 'float' not in line_tokens
         n=len(line_tokens)
         dst=var_add_pref(fun_pref,line_tokens[0])
         assert(line_tokens[1]=='=' and line_tokens[-1]==';')
@@ -482,7 +491,7 @@ class CFGraph(object):
                 G.args.append(v)
 
         for (name,b) in self.blocks.items():
-            b.build_cst_graph(self,"~",G.vars,G.csts)
+            b.build_cst_graph(self,"",G.vars,G.csts)
 
         G.rtn_var=self.functions["~"].rtn_var
 
