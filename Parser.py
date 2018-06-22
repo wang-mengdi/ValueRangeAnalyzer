@@ -129,7 +129,7 @@ def get_real_var(tokens):
 
 def get_expression(pref,tokens): # it's like ['a'] or ['a' '+' 'b'], tokens will be destroyed
     #print("get expression: {}".format(tokens))
-    all_opts=['==','<','>','>=','<=','+','-','*','/']
+    all_opts=['==','!=','<','>','>=','<=','+','-','*','/']
     opt_lis=tuple(filter(lambda t:t in all_opts, tokens))
     assert(len(opt_lis)<=1)
     if len(opt_lis)==0:
@@ -180,7 +180,7 @@ class Block(object):
         ops,opt=get_expression(fun_pref,line_tokens[2:-1])
         #print("get condition: tokens={},ops={},opt={} ".format(line_tokens,ops,opt))
         assert(len(ops)==2)
-        assert(opt in ['==','<','>','>=','<='])
+        assert(opt in ['==','!=','<','>','>=','<='])
         return Condition(ops=tuple(ops),opt=opt)
 
     def get_assignment(self,fun_pref,line_tokens):

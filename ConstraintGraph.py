@@ -34,12 +34,15 @@ class Interval:
     def __str__(self):
         return "({},{})".format(self.l,self.r)
 
+def turn_end(a,t):
+    if a in ('@','+','-'):
+        return a
+    else:
+        return int(a) if t=='int' else float(a)
+
 def turn_data(itv,t): # t='int' or 'float'
     assert t in ('int','float')
-    if t=='int':
-        return Interval(int(itv.l),int(itv.r))
-    else:
-        return Interval(float(itv.l),float(itv.r))
+    return Interval(turn_end(itv.l,t),turn_end(itv.r,t))
 
 def ext_min(a,b): #a,b could be '-','+',or number
     assert '@' not in (a,b)
@@ -223,6 +226,8 @@ class Variable:
         itv_str="None" if self.itv==None else str(self.itv)
         #return "{} in itv {}".format(self.name,itv_str)+"  to=("+",".join(self.to)+")"
         return "{} {} in itv {}".format(self.data,self.name,itv_str)
+    def force_data(self):
+        self.itv=turn_data(self.itv,self.data)
 
 
 class SCComponent:
@@ -314,6 +319,12 @@ class CSTGraph:
         else:
             return self.csts[name]
 
+    def get_data(self,vname):
+        if not_num(vname):
+            return self[vname].data
+        else:
+            return 'int' if is_integer(vname) else 'float'
+
     def ready_to_propagate(self,x):
         if self[x].typ=='VAR':
             return False
@@ -371,7 +382,7 @@ class CSTGraph:
             return self[name].itv
         else:
             x,numtyp=smart_turn_number(name)
-            assert(numtyp=="int")
+            #assert(numtyp=="int")
             return Interval(x,x)
 
     """
@@ -392,14 +403,17 @@ class CSTGraph:
         elif opt=='!=':
             itvn=cnd_intersect(itv1,Interval('-','+'))
         elif opt=='<':
-            itvn=cnd_intersect(itv1,Interval('-',ext_sub(itv2.r,1)))
+            eps = 1 if self.get_data(v2)=='int' else 0
+            itvn=cnd_intersect(itv1,Interval('-',ext_sub(itv2.r,eps)))
         elif opt=='<=':
             itvn=cnd_intersect(itv1,Interval('-',itv2.r))
         elif opt=='>':
-            itvn=cnd_intersect(itv1,Interval(ext_add(itv2.l,1),'+'))
+            eps = 1 if self.get_data(v2)=='int' else 0
+            itvn=cnd_intersect(itv1,Interval(ext_add(itv2.l,eps),'+'))
         elif opt=='>=':
             itvn=cnd_intersect(itv1,Interval(itv2.l,'+'))
         self[dst].itv=itvn
+        self[dst].force_data()
         #print("after applying, itv of k_1 is {}".format(self["k_1"].itv))
 
     def apply_future(self):
@@ -434,6 +448,7 @@ class CSTGraph:
                 self[dst].itv=calc_itv(it1,it2,x.opt)
         else:
             assert(x.typ=='VAR')
+        self[dst].force_data()
         print("afterwhile: {} in {}".format(dst,self[dst].itv))
 
     def mark_indeg(self):
