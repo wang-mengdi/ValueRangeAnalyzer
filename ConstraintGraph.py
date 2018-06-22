@@ -50,7 +50,7 @@ def turn_end(a,t):
     if a in ('@','+','-'):
         return a
     else:
-        return int(a) if t=='int' else float(a)
+        return int(a+1e-6*ext_sgn(a)) if t=='int' else float(a)
 
 def turn_data(itv,t): # t='int' or 'float'
     assert t in ('int','float')
