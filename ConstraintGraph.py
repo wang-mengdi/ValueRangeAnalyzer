@@ -251,11 +251,14 @@ class SCComponent:
                 p.itv=In
         return stabled
 
+
     def select_propagate_start(self,G):
         if len(self.nodenames)==1:
             return self.nodenames[0]
         else:
-            legal_starts=tuple(filter(lambda x:x in G.propagated, self.nodenames))
+            #legal_starts=tuple(filter(lambda x:x in G.propagated, self.nodenames))
+            legal_starts=tuple(filter(G.ready_to_propagate,self.nodenames))
+            assert(len(legal_starts)>0)
             return legal_starts[0]
 
     def widen_range(self,G,ignore_cnd):
@@ -302,6 +305,17 @@ class CSTGraph:
             return self.vars[name]
         else:
             return self.csts[name]
+
+    def ready_to_propagate(self,x):
+        if self[x].typ=='VAR':
+            return False
+        for op in self[x].ops[:-1]:
+            if not_num(op):
+                if self[op].typ=='VAR':
+                    continue
+                if self[op].itv==None:
+                    return False
+        return True
 
     def read_arg_bound(self,filename):
         fin=open(filename)
