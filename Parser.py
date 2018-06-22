@@ -3,11 +3,23 @@ import copy
 from LexicalAnalyzer import *
 from ConstraintGraph import *
 
-entry_function="foo"
+entry_function="foo~"
+
 #unified format: ops=(op1, op2, output), out="+" or "/" or ">"...
 
 def var_add_pref(pref,var):
     return pref+var if not_num(var) else var
+
+def var_base_name(v):
+    assert '~' in v
+    k=v.index('~')
+    if v[k+1]=='_':
+        return v
+    else:
+        if '@' in v:
+            v=v.split('@')[0]
+        v=v.split('_')[0]
+        return v
 
 def replace_list(A,replace_dict):
     A=list(A)
@@ -20,6 +32,11 @@ def replace_list(A,replace_dict):
 def replace_ist(ist,replace_dict):
     ist.ops=replace_list(ist.ops,replace_dict)
     return ist
+
+def add_var_in(v,cfg,var_dict):
+    if not_num(v) and not v in var_dict:
+        t=cfg.var_typ[var_base_name(v)]
+        var_dict[v]=Variable(v,t)
 
 def condition_revert(t): # a t b iff b revert(t) a, i.e. converse
     D={'<':'>','<=':'>=','>':'<','>=':'<=',"==":'==','!=':'!='}
@@ -42,34 +59,34 @@ class Condition:
         #print("name:{}".format(self.name))
         return self.name+" "+self.opt+"("+",".join(self.ops)+")  to=("+",".join(self.to)+")"
         #return "CND# "+self.opt+",".join(self.ops)
-    def build_cst_graph(self,name_pref,var_dict,cst_dict):
+    def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
         for v in self.ops:
-            if not_num(v):
-                if not v in var_dict:
-                    var_dict[v]=Variable(v)
+            add_var_in(v,cfg,var_dict)
         assert(len(self.ops)==2)
         v1,v2=self.ops
         t=self.opt
         if not_num(v1):
+            tp1=cfg.var_typ[var_base_name(v1)]
             #true branch of v1
             if not v1+"@t" in var_dict:
-                var_dict[v1+'@t']=Variable(v1+'@t')
+                var_dict[v1+'@t']=Variable(v1+'@t',tp1)
             ct1=Condition(name_pref+"#t1$CND",[v1,v2,v1+"@t"],t)
             cst_dict[ct1.name]=ct1
             #false branch of v1
             if not v1+"@f" in var_dict:
-                var_dict[v1+'@f']=Variable(v1+'@f')
+                var_dict[v1+'@f']=Variable(v1+'@f',tp1)
             cf1=Condition(name_pref+"#f1$CND",[v1,v2,v1+'@f'],condition_not(t))
             cst_dict[cf1.name]=cf1
         if not_num(v2):
+            tp2=cfg.var_typ[var_base_name(v2)]
             #true branch of v2
             if not v2+"@t" in var_dict:
-                var_dict[v2+'@t']=Variable(v2+'@t')
+                var_dict[v2+'@t']=Variable(v2+'@t',tp2)
             ct2=Condition(name_pref+"#t2$CND",[v2,v1,v2+"@t"],condition_revert(t))
             cst_dict[ct2.name]=ct2
             #false branch of v2
             if not v2+"@f" in var_dict:
-                var_dict[v2+'@f']=Variable(v2+'@f')
+                var_dict[v2+'@f']=Variable(v2+'@f',tp2)
             cf2=Condition(name_pref+"#f2$CND",[v2,v1,v2+'@f'],condition_not(condition_revert(t)))
             cst_dict[cf2.name]=cf2
 
@@ -82,11 +99,9 @@ class Assignment(object):
     def __str__(self):
         return self.name+" "+self.opt+"("+",".join(self.ops)+")"+"  to=("+",".join(self.to)+")"
         #$return "IST# "+self.dst+"="+self.opt+",".join(self.ops)
-    def build_cst_graph(self,name_pref,var_dict,cst_dict):
+    def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
         for v in self.ops:
-            if not_num(v):
-                if not v in var_dict:
-                    var_dict[v]=Variable(v)
+            add_var_in(v,cfg,var_dict)
         a=Assignment(name_pref+"$IST",self.ops,self.opt)
         cst_dict[a.name]=a
 
@@ -98,17 +113,15 @@ class Phi(object):
     def __str__(self):
         return self.name+" "+self.opt+"("+",".join(self.ops)+")  to=("+",".join(self.to)+")"
         #return "PHI# "+self.dst+"=phi("+self.src1+","+self.src2+")"
-    def build_cst_graph(self,name_pref,var_dict,cst_dict):
+    def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
         for v in self.ops:
-            if not_num(v):
-                if not v in var_dict:
-                    var_dict[v]=Variable(v)
+            add_var_in(v,cfg,var_dict)
         p=Phi(name_pref+"$PHI",self.ops)
         cst_dict[p.name]=p
 
+
 def get_real_var(tokens):
     return tokens[0].split('_')[0] if 'D' in tokens else tokens[0]
-
 
 def get_expression(pref,tokens): # it's like ['a'] or ['a' '+' 'b'], tokens will be destroyed
     #print("get expression: {}".format(tokens))
@@ -146,14 +159,15 @@ class Block(object):
             S=S+"\n"+str(self.jmp_cnd)
         return S+"\n$GOTO "+str(self.goto)
 
-    def build_cst_graph(self,name_pref,var_dict,cst_dict):
+    def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
         name_pref=name_pref+self.name
         n=len(self.ists)
+        fun=cfg.functions[self.fun_name]
         for k in range(n):
             i=self.ists[k]
-            i.build_cst_graph("{}{:0>2d}".format(name_pref,k),var_dict,cst_dict)
+            i.build_cst_graph(cfg,"{}{:0>2d}".format(name_pref,k),var_dict,cst_dict)
         if len(self.goto)==2:
-            self.jmp_cnd.build_cst_graph("{}{:0>2d}".format(name_pref,n),var_dict,cst_dict)
+            self.jmp_cnd.build_cst_graph(cfg,"{}{:0>2d}".format(name_pref,n),var_dict,cst_dict)
 
 
     def get_condition(self,fun_pref,line_tokens):
@@ -212,7 +226,7 @@ class Block(object):
             replace_ist(i,D)
 
     def DFS_replace(self,name,block_dict,rep_dict,visited):
-        print("dfs replace if with {} of {},dict={}".format(self.name,name,rep_dict))
+        #print("dfs replace if with {} of {},dict={}".format(self.name,name,rep_dict))
         if name in visited or len(rep_dict)==0:
             return
         visited.add(name)
@@ -292,7 +306,7 @@ class Block(object):
             elif '=' in tokens:
                 #print("parse general assign: ",tokens)
                 assert(tokens[1]=='=' and tokens[-1]==';')
-                if tokens[2] in cfg.functions:
+                if tokens[2]+'~' in cfg.proto_functions:
                     dst=pref+tokens[0]
                     #split this basic block into 2
                     b2=copy.copy(self)
@@ -301,11 +315,11 @@ class Block(object):
                     self.lines=self.lines[:i]
                     b2.name=b2.name+"|"
                     cfg.blocks[b2.name]=b2
-                    fname=tokens[2]
-                    fun=copy.copy(cfg.functions[fname])
+                    fname=tokens[2]+'~'
+                    fun=copy.copy(cfg.proto_functions[fname])
                     cfg.call_cnt[fname] += 1
                     fcnt=cfg.call_cnt[fname]
-                    fun.name=fun.name+str(fcnt)
+                    fun.name=fun.name[:-1]+str(fcnt)+'~'
                     call_pref=fun.name
                     fun.rtn_save=dst
                     fun.rtn_goto=b2.name
@@ -313,7 +327,7 @@ class Block(object):
                     assert(tokens[3]=='(')
                     call_list=self.get_func_call_list(pref,tokens[4:-2])
                     for i in range(len(call_list)):
-                        ops=(call_list[i],call_pref+fun.arglist[i])
+                        ops=(call_list[i],call_pref+fun.arglist[i][1])
                         opt=""
                         self.ists.append(Assignment(ops=tuple(ops),opt=opt))
                     self.goto=(call_pref+fun.entry,)
@@ -345,7 +359,21 @@ class Function(object):
     def __str__(self):
         return "\n".join(map(str,[b for (m,b) in self.blocks.items()]))
 
+    def parse_declaration(self,cfg):
+        #print("parse declaration, lines: ",self.decl_lines)
+        tokens = self.decl_lines
+        for t in tokens:
+            assert t[-1]==';'
+            assert t[0] in ('int','float')
+            cfg.var_typ[self.name+t[1]]=t[0]
+        for t,v in self.arglist:
+            cfg.var_typ[self.name+v]=t
+        print("parse declaration of {} done, dict: {}".format(self.name,cfg.var_typ))
+
+
     def register_function(self,cfg):
+        print("register function:{} ".format(self.name))
+        self.parse_declaration(cfg)
         for m,b in self.blocks.items():
             b=copy.copy(b)
             b.fun_name=self.name
@@ -355,8 +383,9 @@ class Function(object):
         cfg.functions[self.name]=self
 
     def get_name(self,tokens):
-        self.name=tokens[0]
+        self.name=tokens[0]+'~'
         self.arglist = []
+        self.decl_lines = []
         n = len(tokens)
         #print("get_arglist: ",line_tokens)
         assert(tokens[1]=='(')
@@ -364,14 +393,16 @@ class Function(object):
         while i<n:
             t=tokens[i]
             if t=='int' or t=='float':
-                self.arglist.append(tokens[i+1])
+                #self.decl_lines.append([t,tokens[i+1],';'])
+                #self.arglist.append(tokens[i+1])
+                self.arglist.append((t,tokens[i+1]))
                 i += 2
             elif t==',':
                 i += 1
             elif t==')':
                 break
 
-    def parse_from(self,lines): # lines is a collections.deque
+    def parse_from(self,lines):
         is_bb=lambda t:t[0][-1]==':'
         #print("function: {}, lines:{}".format(self.name,lines))
         bbs=list(filter(is_bb,zip(lines,range(len(lines)))))
@@ -379,6 +410,7 @@ class Function(object):
         lines=lines+[[],]
         bn=len(bbs)
         B=[]
+        self.decl_lines=self.decl_lines+lines[:bbs[0][1]]
         for i in range(bn-1):
             lid,rid=bbs[i][1],bbs[i+1][1]
             tokens=lines[lid]
@@ -403,9 +435,11 @@ class CFGraph(object):
         #self.vars = {}
         #self.csts = {} # constraints
         #self.var_names={}
+        self.proto_functions={}
         self.functions={}
         self.blocks={}
         self.call_cnt={}
+        self.var_typ={}
         #self.variables={}
         #self.jumps={}
         #self.assignments={}
@@ -427,28 +461,30 @@ class CFGraph(object):
             f.get_name(lines[lid-1])
             rid=braces[i+1][1]
             f.parse_from(lines[lid+1:rid])
-            self.functions[f.name]=f
+            self.proto_functions[f.name]=f
             self.call_cnt[f.name]=0
-        fun=self.functions[entry_function]
-        fun.name=""
+        fun=self.proto_functions[entry_function]
+        fun.name="~"
         fun.register_function(self)
-        self.arglist=[fun.name+t for t in fun.arglist]
+        self.arglist=[(m,fun.name+t) for (m,t) in fun.arglist]
         self.out=fun.out
         self.blocks[fun.name+fun.entry].DFS_parse(self)
-        print("basic parse completed:\n",self)
+        #print("basic parse completed:\n",self)
         self.replace_if()
 
     def build_cst_graph(self):
+
         G=CSTGraph()
 
-        for v in self.arglist:
+        for (t,v) in self.arglist:
             if not v in G.vars:
-                G.vars[v]=Variable(v)
+                G.vars[v]=Variable(v,t)
                 G.args.append(v)
-        for (name,b) in self.blocks.items():
-            b.build_cst_graph("",G.vars,G.csts)
 
-        G.rtn_var=self.functions[entry_function].rtn_var
+        for (name,b) in self.blocks.items():
+            b.build_cst_graph(self,"~",G.vars,G.csts)
+
+        G.rtn_var=self.functions["~"].rtn_var
 
         for name,c in G.csts.items():
             c.to=(c.ops[-1],)
@@ -460,6 +496,10 @@ class CFGraph(object):
             for v in O:
                 if not_num(v):
                     G.vars[v].to.append(name)
+
+        for v in G.all_vars():
+            print(v)
+
         return G
 
 

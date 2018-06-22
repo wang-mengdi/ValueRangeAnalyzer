@@ -34,6 +34,12 @@ class Interval:
     def __str__(self):
         return "({},{})".format(self.l,self.r)
 
+def turn_data(itv,t): # t='int' or 'float'
+    assert t in ('int','float')
+    if t=='int':
+        return Interval(int(itv.l),int(itv.r))
+    else:
+        return Interval(float(itv.l),float(itv.r))
 
 def ext_min(a,b): #a,b could be '-','+',or number
     assert '@' not in (a,b)
@@ -207,15 +213,17 @@ def narrow_itv(a,a1): # return (result,stabled), just like widen
     return (Interval(l,r),stabled)
 
 class Variable:
-    def __init__(self,name,itv=None):#itv=interval
+    def __init__(self,name,data,itv=None):#itv=interval
         self.typ="VAR"
         self.name=name
         self.itv=itv
         self.to=[]
+        self.data=data
     def __str__(self):
         itv_str="None" if self.itv==None else str(self.itv)
         #return "{} in itv {}".format(self.name,itv_str)+"  to=("+",".join(self.to)+")"
-        return "{} in itv {}".format(self.name,itv_str)
+        return "{} {} in itv {}".format(self.data,self.name,itv_str)
+
 
 class SCComponent:
 
@@ -326,7 +334,7 @@ class CSTGraph:
                 l=int(l)
             if not r in ('-','+'):
                 r=int(r)
-            self.vars[v].itv=Interval(l,r)
+            self.vars['~'+v].itv=Interval(l,r)
 
     def all_cst_names(self):
         return [m for (m,c) in self.csts.items()]

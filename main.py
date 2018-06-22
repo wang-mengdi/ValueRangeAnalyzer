@@ -18,5 +18,5 @@ if __name__=="__main__":
     #print(CFG.functions["foo"])
     CST=CFG.build_cst_graph()
     CST.read_arg_bound(sys.argv[2])
-    print(CST)
+    #print(CST)
     CST.analyze()
