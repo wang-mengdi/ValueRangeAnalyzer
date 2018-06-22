@@ -156,7 +156,7 @@ def itv_neg(a):
     if '@' in (a.l,a.r):
         return Interval('@','@')
     l1,r1=ext_neg(a.l),ext_neg(a.r)
-    return Interval(ext_min(l1,r1),ext_min(l1,r1))
+    return Interval(ext_min(l1,r1),ext_max(l1,r1))
 
 def itv_inv(a):
     if '@' in (a.l,a.r):
@@ -516,6 +516,7 @@ class CSTGraph:
     def analyze(self):
         self.apply_unary()
         self.get_SCC()
+        self.dump_dot("/home/cstdio/log.txt")
         for i in range(len(self.sccs)):
             print(self.sccs[i].nodenames)
         self.propagated=set()
@@ -528,4 +529,3 @@ class CSTGraph:
             print("{} now bound {}".format(v.name,v.itv))
         rtv=self.vars[self.rtn_var].itv
         print("result: [{},{}]".format(rtv.l,rtv.r))
-        self.dump_dot("/home/cstdio/log.txt")

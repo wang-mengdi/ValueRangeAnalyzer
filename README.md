@@ -10,4 +10,4 @@ result:
 7 passed
 8 part passed
 9 WA
-10 RE
+10 WA
