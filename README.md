@@ -1,7 +1,7 @@
 # ValueRangeAnalyzer
 
-result:
-1 passed
+result:  
+1 passed  
 2 passed
 3 passed
 4 passed
