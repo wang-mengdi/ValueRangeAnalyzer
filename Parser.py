@@ -37,10 +37,10 @@ def replace_ist(ist,replace_dict):
     ist.ops=replace_list(ist.ops,replace_dict)
     return ist
 
-def add_var_in(v,cfg,var_dict):
+def add_var_in(v,pb,cfg,var_dict):
     if not_num(v) and not v in var_dict:
         t=cfg.var_typ[var_base_name(v)]
-        var_dict[v]=Variable(v,t)
+        var_dict[v]=Variable(pb,v,t)
 
 def condition_revert(t): # a t b iff b revert(t) a, i.e. converse
     D={'<':'>','<=':'>=','>':'<','>=':'<=',"==":'==','!=':'!='}
@@ -53,8 +53,9 @@ def condition_not(t): # a t b==False iff a not(t) b, i.e. inverse
     return D[t]
 
 class Condition:
-    def __init__(self,name="CND",ops=(),opt=""):
+    def __init__(self,phi_bname,name="CND",ops=(),opt=""):
         self.typ="CND"
+        self.phi_bname=phi_bname
         self.name=name
         self.ops=ops
         self.opt=opt
@@ -65,39 +66,41 @@ class Condition:
         #return "CND# "+self.opt+",".join(self.ops)
     def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
         for v in self.ops:
-            add_var_in(v,cfg,var_dict)
+            add_var_in(v,self.phi_bname,cfg,var_dict)
         assert(len(self.ops)==2)
         v1,v2=self.ops
         t=self.opt
+        pb=self.phi_bname
         if not_num(v1):
             tp1=cfg.var_typ[var_base_name(v1)]
             #true branch of v1
             if not v1+"@t" in var_dict:
-                var_dict[v1+'@t']=Variable(v1+'@t',tp1)
-            ct1=Condition(name_pref+"#t1$CND",[v1,v2,v1+"@t"],t)
+                var_dict[v1+'@t']=Variable(pb,v1+'@t',tp1)
+            ct1=Condition(pb,name_pref+"#t1$CND",[v1,v2,v1+"@t"],t)
             cst_dict[ct1.name]=ct1
             #false branch of v1
             if not v1+"@f" in var_dict:
-                var_dict[v1+'@f']=Variable(v1+'@f',tp1)
-            cf1=Condition(name_pref+"#f1$CND",[v1,v2,v1+'@f'],condition_not(t))
+                var_dict[v1+'@f']=Variable(pb,v1+'@f',tp1)
+            cf1=Condition(pb,name_pref+"#f1$CND",[v1,v2,v1+'@f'],condition_not(t))
             cst_dict[cf1.name]=cf1
         if not_num(v2):
             tp2=cfg.var_typ[var_base_name(v2)]
             #true branch of v2
             if not v2+"@t" in var_dict:
-                var_dict[v2+'@t']=Variable(v2+'@t',tp2)
-            ct2=Condition(name_pref+"#t2$CND",[v2,v1,v2+"@t"],condition_revert(t))
+                var_dict[v2+'@t']=Variable(pb,v2+'@t',tp2)
+            ct2=Condition(pb,name_pref+"#t2$CND",[v2,v1,v2+"@t"],condition_revert(t))
             cst_dict[ct2.name]=ct2
             #false branch of v2
             if not v2+"@f" in var_dict:
-                var_dict[v2+'@f']=Variable(v2+'@f',tp2)
-            cf2=Condition(name_pref+"#f2$CND",[v2,v1,v2+'@f'],condition_not(condition_revert(t)))
+                var_dict[v2+'@f']=Variable(pb,v2+'@f',tp2)
+            cf2=Condition(pb,name_pref+"#f2$CND",[v2,v1,v2+'@f'],condition_not(condition_revert(t)))
             cst_dict[cf2.name]=cf2
 
 
 class Assignment(object):
-    def __init__(self,name="IST",ops=(),opt=""):
+    def __init__(self,phi_bname,name="IST",ops=(),opt=""):
         self.typ="IST"
+        self.phi_bname=phi_bname
         self.name,self.ops,self.opt=name,ops,opt
         self.to=[]
     def __str__(self):
@@ -105,13 +108,14 @@ class Assignment(object):
         #$return "IST# "+self.dst+"="+self.opt+",".join(self.ops)
     def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
         for v in self.ops:
-            add_var_in(v,cfg,var_dict)
-        a=Assignment(name_pref+"$IST",self.ops,self.opt)
+            add_var_in(v,self.phi_bname,cfg,var_dict)
+        a=Assignment(self.phi_bname,name_pref+"$IST",self.ops,self.opt)
         cst_dict[a.name]=a
 
 class Phi(object):
-    def __init__(self,name="PHI",ops=[]):
+    def __init__(self,phi_bname,name="PHI",ops=[]):
         self.typ="PHI"
+        self.phi_bname=phi_bname
         self.name,self.ops,self.opt=name,ops,"phi"
         self.to=[]
     def __str__(self):
@@ -119,8 +123,8 @@ class Phi(object):
         #return "PHI# "+self.dst+"=phi("+self.src1+","+self.src2+")"
     def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
         for v in self.ops:
-            add_var_in(v,cfg,var_dict)
-        p=Phi(name_pref+"$PHI",self.ops)
+            add_var_in(v,self.phi_bname,cfg,var_dict)
+        p=Phi(self.phi_bname,name_pref+"$PHI",self.ops)
         cst_dict[p.name]=p
 
 
@@ -181,7 +185,7 @@ class Block(object):
         #print("get condition: tokens={},ops={},opt={} ".format(line_tokens,ops,opt))
         assert(len(ops)==2)
         assert(opt in ['==','!=','<','>','>=','<='])
-        return Condition(ops=tuple(ops),opt=opt)
+        return Condition(self.phi_bname,ops=tuple(ops),opt=opt)
 
     def get_assignment(self,fun_pref,line_tokens):
         print("get assignment from {},fun_pref={}".format(line_tokens,fun_pref))
@@ -198,7 +202,7 @@ class Block(object):
         ops=ops+(dst,)
         assert(len(ops) in [2,3])
         print("get assignment result ops={}".format(ops))
-        return Assignment(ops=tuple(ops),opt=opt)
+        return Assignment(self.phi_bname,ops=tuple(ops),opt=opt)
 
 
     def get_goto(self,pref,tokens,cfg):
@@ -229,6 +233,30 @@ class Block(object):
             t=t.split('_')[0] # means it's from arg list
         args.append(fun_pref+t)
         return args
+
+    def get_phi_call_list(self,fun_pref,tokens):
+        args=[]
+        while ',' in tokens:
+            k=tokens.index(',')
+            s=tokens[:k]
+            t=s[0]
+            if 'D' in s:
+                t=t.split('_')[0] # means it's from arg list
+            assert s[-1]==')' and s[-3]=='('
+            assert s[-2].isdigit()
+            sr_blk="{}<bb{}>".format(fun_pref,s[-2])
+            args.append((fun_pref+t,sr_blk))
+            tokens=tokens[k+1:]
+        s=tokens
+        t=s[0]
+        if 'D' in s:
+            t=t.split('_')[0] # means it's from arg list
+        assert s[-1]==')' and s[-3]=='('
+        assert s[-2].isdigit()
+        sr_blk="{}<bb{}>".format(fun_pref,s[-2])
+        args.append((fun_pref+t,sr_blk))
+        return args
+        
 
     def replace(self,D):
         for i in self.ists:
@@ -275,6 +303,7 @@ class Block(object):
         if self.parsed:
             return
         self.parsed=True
+        self.phi_bname=self.name
         #print("DFS parse block:{}".format(self.name))
         #print("lines:{}".format(self.lines))
         fun=cfg.functions[self.fun_name]
@@ -290,9 +319,12 @@ class Block(object):
                 dst=var_add_pref(pref,tokens[1])
                 assert(tokens[2]=='=' and tokens[3]=='PHI' and tokens[4]=='<')
                 assert(tokens[-1]=='>')
-                src1,src2=self.get_func_call_list(pref,tokens[5:-1])
+                ((src1,blk1),(src2,blk2))=self.get_phi_call_list(pref,tokens[5:-1])
                 print("parse PHI: src1,src2,dst={},{},{}".format(src1,src2,dst))
-                self.ists.append(Phi(ops=[src1,src2,dst]))
+                p=Phi(self.phi_bname,ops=(src1,src2,dst))
+                p.src_blks=(blk1,blk2)
+                self.ists.append(p)
+                #self.ists.append(Phi(ops=[src1,src2,dst]))
             elif tokens[0]=='goto':
                 self.goto=(self.get_goto(pref,tokens,cfg),)
             elif tokens[0]=='if':
@@ -308,7 +340,7 @@ class Block(object):
                 if fun.rtn_save!=None: # return to another function point
                     self.cross_func_jump=True
                     ops=(fun.rtn_var,fun.rtn_save)
-                    self.ists.append(Assignment(ops=ops,opt=""))
+                    self.ists.append(Assignment(self.phi_bname,ops=ops,opt=""))
                     self.goto=(fun.rtn_goto,)
                 else:
                     cfg.rtn_var=fun.rtn_var
@@ -322,7 +354,7 @@ class Block(object):
                     b2.parsed=False
                     b2.lines=b2.lines[i:] # the first line of block.lines is useless, just add a place
                     self.lines=self.lines[:i]
-                    b2.name=b2.name+"|"
+                    b2.name=b2.name+"|" # note that b2.phi_bname is still self.phi_bname
                     cfg.blocks[b2.name]=b2
                     fname=tokens[2]+'~'
                     fun=copy.copy(cfg.proto_functions[fname])
@@ -338,7 +370,7 @@ class Block(object):
                     for i in range(len(call_list)):
                         ops=(call_list[i],call_pref+fun.arglist[i][1])
                         opt=""
-                        self.ists.append(Assignment(ops=tuple(ops),opt=opt))
+                        self.ists.append(Assignment(self.phi_bname,ops=tuple(ops),opt=opt))
                     self.goto=(call_pref+fun.entry,)
                     #self.lines.append(get_tokens("goto {};".format(call_pref+fun.entry)))
                     #print("manually add goto:",self.lines[-1])
@@ -480,6 +512,7 @@ class CFGraph(object):
         self.blocks[fun.name+fun.entry].DFS_parse(self)
         #print("basic parse completed:\n",self)
         self.replace_if()
+        print("self.blocks:",self.blocks)
 
     def build_cst_graph(self):
 
@@ -487,7 +520,7 @@ class CFGraph(object):
 
         for (t,v) in self.arglist:
             if not v in G.vars:
-                G.vars[v]=Variable(v,t)
+                G.vars[v]=Variable("~<bb1>",v,t)
                 G.args.append(v)
 
         for (name,b) in self.blocks.items():
@@ -508,6 +541,10 @@ class CFGraph(object):
 
         for v in G.all_vars():
             print(v)
+
+        #for n,b in self.blocks.items():
+            #for ist in b.ists:
+                #G[ist.name].phi_bname=b.phi_name
 
         return G
 

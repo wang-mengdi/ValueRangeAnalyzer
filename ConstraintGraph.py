@@ -230,8 +230,9 @@ def narrow_itv(a,a1): # return (result,stabled), just like widen
     return (Interval(l,r),stabled)
 
 class Variable:
-    def __init__(self,name,data,itv=None):#itv=interval
+    def __init__(self,phi_bname,name,data,itv=None):#itv=interval
         self.typ="VAR"
+        self.phi_bname=phi_bname
         self.name=name
         self.itv=itv
         self.to=[]
