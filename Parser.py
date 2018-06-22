@@ -64,7 +64,7 @@ class Condition:
         #print("name:{}".format(self.name))
         return self.name+" "+self.opt+"("+",".join(self.ops)+")  to=("+",".join(self.to)+")"
         #return "CND# "+self.opt+",".join(self.ops)
-    def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
+    def build_cst_graph(self,blk,cfg,name_pref,var_dict,cst_dict):
         for v in self.ops:
             add_var_in(v,self.phi_bname,cfg,var_dict)
         assert(len(self.ops)==2)
@@ -74,26 +74,30 @@ class Condition:
         if not_num(v1):
             tp1=cfg.var_typ[var_base_name(v1)]
             #true branch of v1
-            if not v1+"@t" in var_dict:
-                var_dict[v1+'@t']=Variable(pb,v1+'@t',tp1)
-            ct1=Condition(pb,name_pref+"#t1$CND",[v1,v2,v1+"@t"],t)
+            v1t=v1+"@t"+blk.replace_stmp[v1]
+            if not v1t in var_dict:
+                var_dict[v1t]=Variable(pb,v1t,tp1)
+            ct1=Condition(pb,name_pref+"#t1$CND",[v1,v2,v1t],t)
             cst_dict[ct1.name]=ct1
             #false branch of v1
-            if not v1+"@f" in var_dict:
-                var_dict[v1+'@f']=Variable(pb,v1+'@f',tp1)
-            cf1=Condition(pb,name_pref+"#f1$CND",[v1,v2,v1+'@f'],condition_not(t))
+            v1f=v1+'@f'+blk.replace_stmp[v1]
+            if not v1f in var_dict:
+                var_dict[v1f]=Variable(pb,v1f,tp1)
+            cf1=Condition(pb,name_pref+"#f1$CND",[v1,v2,v1f],condition_not(t))
             cst_dict[cf1.name]=cf1
         if not_num(v2):
             tp2=cfg.var_typ[var_base_name(v2)]
             #true branch of v2
-            if not v2+"@t" in var_dict:
-                var_dict[v2+'@t']=Variable(pb,v2+'@t',tp2)
-            ct2=Condition(pb,name_pref+"#t2$CND",[v2,v1,v2+"@t"],condition_revert(t))
+            v2t=v2+'@t'+blk.replace_stmp[v2]
+            if not v2t in var_dict:
+                var_dict[v2t]=Variable(pb,v2t,tp2)
+            ct2=Condition(pb,name_pref+"#t2$CND",[v2,v1,v2t],condition_revert(t))
             cst_dict[ct2.name]=ct2
             #false branch of v2
-            if not v2+"@f" in var_dict:
-                var_dict[v2+'@f']=Variable(pb,v2+'@f',tp2)
-            cf2=Condition(pb,name_pref+"#f2$CND",[v2,v1,v2+'@f'],condition_not(condition_revert(t)))
+            v2f=v2+'@f'+blk.replace_stmp[v2]
+            if not v2f in var_dict:
+                var_dict[v2f]=Variable(pb,v2f,tp2)
+            cf2=Condition(pb,name_pref+"#f2$CND",[v2,v1,v2f],condition_not(condition_revert(t)))
             cst_dict[cf2.name]=cf2
 
 
@@ -160,6 +164,7 @@ class Block(object):
         self.ists=[]
         self.parsed=False
         self.cross_func_jump=False
+        self.replace_stmp={}
 
     def __str__(self):
         S=self.name+":\n"+"\n".join(map(str,self.ists))
@@ -177,7 +182,7 @@ class Block(object):
             i=self.ists[k]
             i.build_cst_graph(cfg,"{}{:0>2d}".format(name_pref,k),var_dict,cst_dict)
         if len(self.goto)==2:
-            self.jmp_cnd.build_cst_graph(cfg,"{}{:0>2d}".format(name_pref,n),var_dict,cst_dict)
+            self.jmp_cnd.build_cst_graph(self,cfg,"{}{:0>2d}".format(name_pref,n),var_dict,cst_dict)
 
 
     def get_condition(self,fun_pref,line_tokens):
@@ -290,13 +295,20 @@ class Block(object):
         vis_true=set()
         vis_true.add(self.name)
         var_ops=list(filter(not_num,self.jmp_cnd.ops))
-        ops_with_suf_zip=lambda ops,suf:zip(ops,list(map(lambda a:a+suf,ops)))
+        for v in var_ops:
+            if v not in cfg.replace_cnt:
+                cfg.replace_cnt[v]=1
+            else:
+                cfg.replace_cnt[v]+=1
+            self.replace_stmp[v]=str(cfg.replace_cnt[v])
+        ops_with_suf_zip=lambda ops,suf:zip(ops,list(map(lambda a:a+suf+str(cfg.replace_cnt[v]),ops)))
         D=dict(ops_with_suf_zip(var_ops,'@t'))
         self.DFS_replace(self.goto[0],cfg.blocks,D,vis_true)
         vis_false=set()
         vis_false.add(self.name)
         D=dict(ops_with_suf_zip(var_ops,'@f'))
         self.DFS_replace(self.goto[1],cfg.blocks,D,vis_false)
+
 ###########################################################################################
 #TODO: does this assert bite?
         #assert(len(vis_true&vis_false)==1)
@@ -482,6 +494,7 @@ class CFGraph(object):
         self.blocks={}
         self.call_cnt={}
         self.var_typ={}
+        self.replace_cnt={}
         #self.variables={}
         #self.jumps={}
         #self.assignments={}
