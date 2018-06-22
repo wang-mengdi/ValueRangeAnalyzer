@@ -251,15 +251,16 @@ class SCComponent:
         self.name=name
         self.nodenames=tuple(nodenames)
 
-    def DFS_propagate(self,x,G,visited,ignore_cnd):#x is a name string, G is the whole constraint graph
+
+    def DFS_propagate(self,x,G,visited,ignore_cnd,phi_inward):#x is a name string, G is the whole constraint graph
         G.propagated.add(x)
         if not x in self.nodenames or x in visited:
             return
         if G[x].typ!="VAR":
-            G.propagate_node(x,ignore_cnd)
+            G.propagate_node(x,ignore_cnd,phi_inward)
         visited.add(x)
         for y in G[x].to:
-            self.DFS_propagate(y,G,visited,ignore_cnd)
+            self.DFS_propagate(y,G,visited,ignore_cnd,phi_inward)
 
     def save_old_range(self,G):
         for x in self.nodenames:
@@ -285,18 +286,21 @@ class SCComponent:
             return self.nodenames[0]
         else:
             #legal_starts=tuple(filter(lambda x:x in G.propagated, self.nodenames))
+            print("select propagate start from {}".format(self.nodenames))
             legal_starts=tuple(filter(G.ready_to_propagate,self.nodenames))
             assert(len(legal_starts)>0)
             return legal_starts[0]
 
     def widen_range(self,G,ignore_cnd):
+        inward=False
         while True:
             self.save_old_range(G)
             visited=set()
             x=self.select_propagate_start(G)
-            self.DFS_propagate(x,G,visited,ignore_cnd)
+            self.DFS_propagate(x,G,visited,ignore_cnd,inward)
             if self.update_range(G,widen_itv):
                 break
+            inward=True
 
     def select_narrow_start(self,G):
         if len(self.nodenames)==1:
@@ -309,13 +313,15 @@ class SCComponent:
                 return self.nodenames[0]
 
     def narrow_range(self,G):
+        inward=False
         while True:
             self.save_old_range(G)
             visited=set()
             x=self.select_narrow_start(G)
-            self.DFS_propagate(x,G,visited,ignore_cnd=False)
+            self.DFS_propagate(x,G,visited,ignore_cnd=False,phi_inward=inward)
             if self.update_range(G,narrow_itv):
                 break
+            inward=True
 
 class CSTGraph:
     def __init__(self):
@@ -343,12 +349,20 @@ class CSTGraph:
     def ready_to_propagate(self,x):
         if self[x].typ=='VAR':
             return False
+        if self[x].typ=='PHI': # phi is always ready
+            for op in self[x].ops[:-1]:
+                if not_num(op):
+                    if self[op].itv!=None:
+                        return True
+                else:
+                    return True
+            return False
         for op in self[x].ops[:-1]:
             if not_num(op):
-                if self[op].typ=='VAR':
-                    continue
-                if self[op].itv==None:
+                if self[op].typ=='VAR' and self[op].itv==None:
                     return False
+#                if self[op].itv==None:
+#                    return False
         return True
 
     def read_arg_bound(self,filename):
@@ -435,7 +449,7 @@ class CSTGraph:
         for xname in self.all_cst_names():
             self.apply_node_future(xname)
 
-    def propagate_node(self,xname,ignore_cnd):
+    def propagate_node(self,xname,ignore_cnd,phi_inward):
         x=self[xname]
         print("propagate node {}, typ={}, ops={}".format(xname,x.typ,x.ops))
         if x.typ=="CND":
@@ -448,7 +462,21 @@ class CSTGraph:
         elif x.typ=="PHI":
             assert(len(x.ops)==3)
             v1,v2,dst=x.ops
+            print("propagate phi: {} and {}".format(self[v1].itv,self[v2].itv))
             self[dst].itv=phi_union(self[v1].itv,self[v2].itv)
+            """
+            dst=x.ops[-1]
+            if x.phi_bname not in x.src_blks:
+                v1,v2=x.ops
+                self[dst].itv=phi_union(self[v1].itv,self[v2].itv)
+            else:
+                print("{} src_blks: {}, phi_bname:{}".format(x.name,x.src_blks,x.phi_bname))
+                k=x.src_blks.index(x.phi_bname)
+                if not phi_inward:
+                    k=1-k
+                self[dst].itv=self[x.ops[k]].itv
+            #self[dst].itv=phi_union(self[v1].itv,self[v2].itv)
+            """
         elif x.typ=='IST':
             assert(len(x.ops) in (2,3))
             if len(x.ops)==2: # unary
@@ -517,6 +545,7 @@ class CSTGraph:
     def analyze(self):
         self.apply_unary()
         self.get_SCC()
+        self.dump_dot("/home/cstdio/log.txt")
         for i in range(len(self.sccs)):
             print(self.sccs[i].nodenames)
         self.propagated=set()
@@ -529,4 +558,3 @@ class CSTGraph:
             print("{} now bound {}".format(v.name,v.itv))
         rtv=self.vars[self.rtn_var].itv
         print("result: [{},{}]".format(rtv.l,rtv.r))
-        self.dump_dot("/home/cstdio/log.txt")

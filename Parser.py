@@ -113,10 +113,11 @@ class Assignment(object):
         cst_dict[a.name]=a
 
 class Phi(object):
-    def __init__(self,phi_bname,name="PHI",ops=[]):
+    def __init__(self,phi_bname,name="PHI",ops=(),src_blks=()):
         self.typ="PHI"
         self.phi_bname=phi_bname
         self.name,self.ops,self.opt=name,ops,"phi"
+        self.src_blks=src_blks
         self.to=[]
     def __str__(self):
         return self.name+" "+self.opt+"("+",".join(self.ops)+")  to=("+",".join(self.to)+")"
@@ -124,7 +125,8 @@ class Phi(object):
     def build_cst_graph(self,cfg,name_pref,var_dict,cst_dict):
         for v in self.ops:
             add_var_in(v,self.phi_bname,cfg,var_dict)
-        p=Phi(self.phi_bname,name_pref+"$PHI",self.ops)
+        #print("add cst phi node: phi_name={}".format(self.phi_bname))
+        p=Phi(self.phi_bname,name_pref+"$PHI",self.ops,self.src_blks)
         cst_dict[p.name]=p
 
 
@@ -320,9 +322,8 @@ class Block(object):
                 assert(tokens[2]=='=' and tokens[3]=='PHI' and tokens[4]=='<')
                 assert(tokens[-1]=='>')
                 ((src1,blk1),(src2,blk2))=self.get_phi_call_list(pref,tokens[5:-1])
-                print("parse PHI: src1,src2,dst={},{},{}".format(src1,src2,dst))
-                p=Phi(self.phi_bname,ops=(src1,src2,dst))
-                p.src_blks=(blk1,blk2)
+                #print("parse PHI: src1,src2,dst={},{},{},bname={}".format(src1,src2,dst,self.phi_bname))
+                p=Phi(self.phi_bname,ops=(src1,src2,dst),src_blks=(blk1,blk2))
                 self.ists.append(p)
                 #self.ists.append(Phi(ops=[src1,src2,dst]))
             elif tokens[0]=='goto':

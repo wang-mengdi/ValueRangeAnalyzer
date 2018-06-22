@@ -18,6 +18,6 @@ def get_tokens(S):
     tokens = patterns.findall(S)
     sum_tokens = sum(list(map(lambda t:len(t),tokens)))
     sum_text = len(S)-S.count(' ')-S.count('\n')
-    print("sum tokens={}, sum text={}".format(sum_tokens,sum_text))
+    #print("sum tokens={}, sum text={}".format(sum_tokens,sum_text))
     assert sum_tokens == sum_text, "regex failed"
     return tokens
