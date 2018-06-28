@@ -195,7 +195,7 @@ class Block(object):
         return Condition(self.phi_bname,ops=tuple(ops),opt=opt)
 
     def get_assignment(self,fun_pref,line_tokens):
-        print("get assignment from {},fun_pref={}".format(line_tokens,fun_pref))
+        #print("get assignment from {},fun_pref={}".format(line_tokens,fun_pref))
         if '(int)' in line_tokens:
             line_tokens=erase_token(line_tokens,'(int)')
         if '(float)' in line_tokens:
@@ -208,7 +208,7 @@ class Block(object):
         assert(opt=="" or opt in ['+','-','*','/'])
         ops=ops+(dst,)
         assert(len(ops) in [2,3])
-        print("get assignment result ops={}".format(ops))
+        #print("get assignment result ops={}".format(ops))
         return Assignment(self.phi_bname,ops=tuple(ops),opt=opt)
 
 
@@ -422,11 +422,11 @@ class Function(object):
             cfg.var_typ[self.name+t[1]]=t[0]
         for t,v in self.arglist:
             cfg.var_typ[self.name+v]=t
-        print("parse declaration of {} done, dict: {}".format(self.name,cfg.var_typ))
+        #print("parse declaration of {} done, dict: {}".format(self.name,cfg.var_typ))
 
 
     def register_function(self,cfg):
-        print("register function:{} ".format(self.name))
+        #print("register function:{} ".format(self.name))
         self.parse_declaration(cfg)
         for m,b in self.blocks.items():
             b=copy.copy(b)
@@ -507,6 +507,7 @@ class CFGraph(object):
             b.start_replace_if(self)
 
     def parse_from(self, lines): # lines is a list, its every element is a list of tokens
+        print("start parsing")
         is_brace=lambda t:t[0][0] in ["{","}"]
         braces=list(filter(is_brace,zip(lines,range(len(lines)))))
         fn=len(braces)
@@ -526,9 +527,11 @@ class CFGraph(object):
         self.blocks[fun.name+fun.entry].DFS_parse(self)
         #print("basic parse completed:\n",self)
         self.replace_if()
-        print("self.blocks:",self.blocks)
+        #print("self.blocks:",self.blocks)
 
     def build_cst_graph(self):
+        
+        print("building cst graph")
 
         G=CSTGraph()
 
@@ -552,9 +555,6 @@ class CFGraph(object):
             for v in O:
                 if not_num(v):
                     G.vars[v].to.append(name)
-
-        for v in G.all_vars():
-            print(v)
 
         #for n,b in self.blocks.items():
             #for ist in b.ists:

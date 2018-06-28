@@ -173,7 +173,7 @@ def itv_inv(a):
     return Interval(l1,r1)
 
 def calc_itv(a,b,opt):
-    print("calc itv: {} {} {}".format(a,opt,b))
+    #print("calc itv: {} {} {}".format(a,opt,b))
     if '@' in (a.l,a.r,b.l,b.r):
         return Interval('@','@')
     if opt=='+':
@@ -183,7 +183,7 @@ def calc_itv(a,b,opt):
     elif opt=='*':
         res=[ext_mul(i,j) for i in (a.l,a.r) for j in (b.l,b.r)]
         l,r=ext_min_list(res),ext_max_list(res)
-        print("calc itv with *: a={},b={},res={}".format(a,b,Interval(l,r)))
+        #print("calc itv with *: a={},b={},res={}".format(a,b,Interval(l,r)))
         return Interval(l,r)
     elif opt=='/':
         return calc_itv(a,itv_inv(b),'*')
@@ -213,7 +213,7 @@ def narrow_itv(a,a1): # return (result,stabled), just like widen
             return it,True
         else:
             return it,False
-    print("narrow interval {} to {}".format(a,a1))
+    #print("narrow interval {} to {}".format(a,a1))
     stabled = True
     # it's after widening, so a cannot be None
     assert(a!=None)
@@ -286,7 +286,7 @@ class SCComponent:
             return self.nodenames[0]
         else:
             #legal_starts=tuple(filter(lambda x:x in G.propagated, self.nodenames))
-            print("select propagate start from {}".format(self.nodenames))
+            #print("select propagate start from {}".format(self.nodenames))
             legal_starts=tuple(filter(G.ready_to_propagate,self.nodenames))
             assert(len(legal_starts)>0)
             return legal_starts[0]
@@ -451,7 +451,7 @@ class CSTGraph:
 
     def propagate_node(self,xname,ignore_cnd,phi_inward):
         x=self[xname]
-        print("propagate node {}, typ={}, ops={}".format(xname,x.typ,x.ops))
+        #print("propagate node {}, typ={}, ops={}".format(xname,x.typ,x.ops))
         if x.typ=="CND":
             v1,v2,dst=x.ops
             #print("propagate CND, v1={},v2={},dst={}".format(v1,v2,dst))
@@ -462,7 +462,7 @@ class CSTGraph:
         elif x.typ=="PHI":
             assert(len(x.ops)==3)
             v1,v2,dst=x.ops
-            print("propagate phi: {} and {}".format(self[v1].itv,self[v2].itv))
+            #print("propagate phi: {} and {}".format(self[v1].itv,self[v2].itv))
             self[dst].itv=phi_union(self[v1].itv,self[v2].itv)
             """
             dst=x.ops[-1]
@@ -487,12 +487,12 @@ class CSTGraph:
             else: # binary
                 src1,src2,dst=x.ops
                 it1,it2=self.get_itv(src1),self.get_itv(src2)
-                print("propagate binary IST, it1={}, it2={}".format(it1,it2))
+                #print("propagate binary IST, it1={}, it2={}".format(it1,it2))
                 self[dst].itv=calc_itv(it1,it2,x.opt)
         else:
             assert(x.typ=='VAR')
         self[dst].force_data()
-        print("afterwhile: {} in {}".format(dst,self[dst].itv))
+        #print("afterwhile: {} in {}".format(dst,self[dst].itv))
 
     def mark_indeg(self):
         for p in self.all_nodes():
@@ -505,7 +505,7 @@ class CSTGraph:
         self.mark_indeg()
         self.pure_innodes=tuple(filter(lambda t:t.indeg==0,self.all_nodes()))
         for p in self.pure_innodes:
-            print("pure innode: ",p.name)
+            #print("pure innode: ",p.name)
             assert(p.typ=="IST" or p.name in self.args) # unary assignments
 
     def Tarjan(self,u): # u is a name
@@ -545,16 +545,15 @@ class CSTGraph:
     def analyze(self):
         self.apply_unary()
         self.get_SCC()
-        for i in range(len(self.sccs)):
-            print(self.sccs[i].nodenames)
         self.propagated=set()
+        print("start widening")
         self.widen_along_sccs()
-        print("applying future:")
+        print("start applying future")
         self.apply_future()
-        print("narrowing:")
+        print("start narrowing")
         self.narrow_along_sccs()
         for v in self.all_vars():
-            print("{} now bound {}".format(v.name,v.itv))
+            print("{} final bound {}".format(v.name,v.itv))
         rtv=self.vars[self.rtn_var].itv
         print("result: [{},{}]".format(rtv.l,rtv.r))
         #self.dump_dot("/home/cstdio/log.txt")
